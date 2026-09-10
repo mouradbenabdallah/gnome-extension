@@ -1,0 +1,12 @@
+{
+  "uuid": "sparkline-monitor@local",
+  "name": "Codenotch Monitor",
+  "description": "Ultra-low-overhead Codenotch-style circular ring gauges for CPU, RAM, and Cooling Fans powered by a native Rust daemon.",
+  "shell-version": [
+    "45",
+    "46",
+    "47"
+  ],
+  "url": "https://github.com/local/gnome-sparkline-monitor",
+  "version": 2
+}
