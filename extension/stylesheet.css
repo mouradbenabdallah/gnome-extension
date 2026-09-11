@@ -1,13 +1,19 @@
 /* Codenotch Top Panel Capsule & macOS-style Tooltip Card Styling */
 
-/* --- Top Panel "Notch" Capsule (macOS menu-bar extra feel) --- */
+/* --- Grow the top bar to fit the vertical capsule --- */
+#panel.codenotch-vertical-panel,
+.codenotch-vertical-panel {
+    min-height: 104px;
+}
+
+/* --- Top Panel "Notch" Capsule (macOS menu-bar extra feel, vertical stack) --- */
 .codenotch-notch-box {
     background-color: rgba(12, 12, 15, 0.82);
     border: 1px solid rgba(255, 255, 255, 0.16);
-    border-radius: 20px;
-    padding: 2px 9px;
-    spacing: 9px;
-    margin: 2px 4px;
+    border-radius: 14px;
+    padding: 6px 8px;
+    spacing: 3px;
+    margin: 3px 4px;
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10),
         0 2px 8px rgba(0, 0, 0, 0.45);
 }
@@ -18,21 +24,29 @@
 }
 
 .codenotch-metric-cell {
-    spacing: 5px;
+    spacing: 6px;
+}
+
+.codenotch-metric-cell + .codenotch-metric-cell {
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 3px;
+    margin-top: 2px;
+}
+
+.codenotch-metric-labels {
+    spacing: 0px;
 }
 
 .codenotch-value-label {
-    font-size: 8.5pt;
+    font-size: 9pt;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.96);
-    margin-left: 3px;
 }
 
-.codenotch-fan-rpm {
-    font-size: 7.5pt;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.7);
-    margin-left: 1px;
+.codenotch-value-sublabel {
+    font-size: 6.8pt;
+    color: rgba(255, 255, 255, 0.55);
+    min-height: 8px;
 }
 
 /* --- Popover BoxPointer arrow (scoped to this menu only) --- */
@@ -75,6 +89,20 @@
 
 .codenotch-fansublist {
     spacing: 2px;
+}
+
+.codenotch-fansublist .codenotch-card-row {
+    margin: 3px 0;
+    padding: 4px 8px;
+    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    spacing: 6px;
+}
+
+.codenotch-fansublist .codenotch-card-val {
+    font-size: 9pt;
+    font-weight: 700;
 }
 
 .codenotch-card-label {

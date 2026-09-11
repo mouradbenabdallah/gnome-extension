@@ -1,4 +1,3 @@
-mod bat;
 mod cpu;
 mod ctrl;
 mod disk;
@@ -38,8 +37,6 @@ pub struct TelemetryData {
     pub net_tx_kbs: f32,
     pub disk_read_kbs: f32,
     pub disk_write_kbs: f32,
-    pub bat_pct: Option<u32>,
-    pub bat_status: Option<String>,
     pub cpu_temp: Option<u32>,
 }
 
@@ -152,7 +149,6 @@ fn main() {
         let (net_rx_kbs, net_tx_kbs) = net_collector.sample();
         let (disk_read_kbs, disk_write_kbs) = disk_collector.sample();
         let top = process_collector.sample();
-        let (bat_pct, bat_status) = bat::sample_battery();
         let cpu_temp = thermal::sample_cpu_temp();
 
         // GPU polling: sample every other tick or >= 2000ms to preserve battery P-states
@@ -179,8 +175,6 @@ fn main() {
             net_tx_kbs,
             disk_read_kbs,
             disk_write_kbs,
-            bat_pct,
-            bat_status,
             cpu_temp,
         };
 
@@ -269,8 +263,6 @@ fn run_mock(interval_ms: u64, once_mode: bool) {
             net_tx_kbs: 40.0 + 300.0 * (t * 0.7).sin().abs(),
             disk_read_kbs: 200.0 + 2600.0 * (t * 0.5).sin().abs(),
             disk_write_kbs: 80.0 + 900.0 * (t * 0.9).sin().abs(),
-            bat_pct: Some(((67.0 + 5.0 * (t * 0.05).sin()) as u32).min(100)),
-            bat_status: Some("Discharging".to_string()),
             cpu_temp: Some(((52.0 + 8.0 * (t * 0.35).sin()) as u32).clamp(35, 95)),
         };
 

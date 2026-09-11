@@ -1,7 +1,7 @@
 {
   "uuid": "sparkline-monitor@local",
   "name": "Codenotch Monitor",
-  "description": "macOS-style system monitor: ring gauges for CPU, RAM, fans and battery, plus Activity-Monitor graphs for per-core CPU, CPU temp, GPU, network, disk, history and top processes, powered by a native Rust daemon.",
+  "description": "macOS-style system monitor: vertical ring gauges for CPU, RAM and fans (auto-detects 1+ fans), plus Activity-Monitor graphs for per-core CPU, CPU temp, GPU, network, disk, history and top processes, powered by a native Rust daemon.",
   "shell-version": [
     "45",
     "46",
@@ -11,5 +11,5 @@
     "50"
   ],
   "url": "https://github.com/local/gnome-sparkline-monitor",
-  "version": 4
+  "version": 5
 }

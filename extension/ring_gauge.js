@@ -226,8 +226,6 @@ class RingGauge extends St.DrawingArea {
             this._drawRamGlyph(cr);
         } else if (this._type === 'fan') {
             this._drawFanGlyph(cr);
-        } else if (this._type === 'battery') {
-            this._drawBatteryGlyph(cr);
         }
 
         cr.restore();
@@ -338,33 +336,5 @@ class RingGauge extends St.DrawingArea {
             );
             cr.stroke();
         }
-    }
-
-    _drawBatteryGlyph(cr) {
-        // Thin battery silhouette (body + positive terminal nub)
-        const w = 10.0;
-        const h = 5.0;
-        const halfW = w / 2.0;
-        const halfH = h / 2.0;
-
-        cr.setLineWidth(1.1);
-        cr.setLineCap(cairo.LineCap.ROUND);
-
-        // Body
-        cr.rectangle(-halfW, -halfH, w, h);
-        cr.stroke();
-
-        // Capacity fill indicator (scales with charge %)
-        const frac = this._value / 100.0;
-        if (frac > 0.01) {
-            const inner = 1.0;
-            const fillW = (w - inner * 2.0) * Math.min(1.0, frac);
-            cr.rectangle(-halfW + inner, -halfH + inner, Math.max(fillW, 0.5), h - inner * 2.0);
-            cr.fill();
-        }
-
-        // Positive terminal nub
-        cr.rectangle(halfW - 0.6, -1.5, 1.4, 3.0);
-        cr.fill();
     }
 });

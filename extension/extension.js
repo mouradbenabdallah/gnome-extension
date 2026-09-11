@@ -39,7 +39,6 @@ export default class SparklineMonitorExtension extends Extension {
 
     this._manualPaused = false;
     this._pauseWanted = false;
-    this._batPresent = false;
     this._cpuHistory = [];
 
     this._alertConsec = { cpu: 0, gpu: 0, cpuTemp: 0, gpuTemp: 0 };
@@ -52,10 +51,12 @@ export default class SparklineMonitorExtension extends Extension {
     // 1. Create Panel Indicator Button
     this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
 
-    // 2. Codenotch Notch Capsule
+    // 2. Codenotch Notch Capsule (vertical stack: CPU / RAM / Fan)
     const notchBox = new St.BoxLayout({
       style_class: "codenotch-notch-box",
+      vertical: true,
       y_align: Clutter.ActorAlign.CENTER,
+      x_align: Clutter.ActorAlign.CENTER,
       reactive: true,
     });
 
@@ -74,15 +75,11 @@ export default class SparklineMonitorExtension extends Extension {
     notchBox.add_child(fanBox);
     this._fanCell = fanBox;
 
-    // --- Battery Cell (laptops only) ---
-    const batBox = this._addPanelCell("battery");
-    notchBox.add_child(batBox);
-    this._batCell = batBox;
-
     // --- Compact status dot ---
     this._compactDot = new St.Widget({
       style_class: "codenotch-dot codenotch-fill-ample",
       y_align: Clutter.ActorAlign.CENTER,
+      x_align: Clutter.ActorAlign.CENTER,
     });
     notchBox.add_child(this._compactDot);
 
@@ -93,6 +90,9 @@ export default class SparklineMonitorExtension extends Extension {
 
     // 4. Add to GNOME Shell status area
     Main.panel.addToStatusArea(this.uuid, this._indicator);
+
+    // Grow the top panel to fit the vertical capsule.
+    Main.panel.add_style_class_name("codenotch-vertical-panel");
 
     // 5. Apply settings-driven visibility & palette
     this._applyUiSettings();
@@ -115,7 +115,13 @@ export default class SparklineMonitorExtension extends Extension {
   _addPanelCell(type) {
     const cell = new St.BoxLayout({
       style_class: "codenotch-metric-cell",
+      vertical: false,
       y_align: Clutter.ActorAlign.CENTER,
+    });
+    const labelBox = new St.BoxLayout({
+      vertical: true,
+      y_align: Clutter.ActorAlign.CENTER,
+      style_class: "codenotch-metric-labels",
     });
     if (type === "cpu") {
       this._cpuGauge = new RingGauge({ type: "cpu", size: 28, strokeWidth: 2.8 });
@@ -124,8 +130,14 @@ export default class SparklineMonitorExtension extends Extension {
         style_class: "codenotch-value-label",
         y_align: Clutter.ActorAlign.CENTER,
       });
+      this._cpuSub = new St.Label({
+        text: "",
+        style_class: "codenotch-value-sublabel",
+        y_align: Clutter.ActorAlign.CENTER,
+      });
       cell.add_child(this._cpuGauge);
-      cell.add_child(this._cpuLabel);
+      labelBox.add_child(this._cpuLabel);
+      labelBox.add_child(this._cpuSub);
     } else if (type === "ram") {
       this._ramGauge = new RingGauge({ type: "ram", size: 28, strokeWidth: 2.8 });
       this._ramLabel = new St.Label({
@@ -133,8 +145,14 @@ export default class SparklineMonitorExtension extends Extension {
         style_class: "codenotch-value-label",
         y_align: Clutter.ActorAlign.CENTER,
       });
+      this._ramSub = new St.Label({
+        text: "",
+        style_class: "codenotch-value-sublabel",
+        y_align: Clutter.ActorAlign.CENTER,
+      });
       cell.add_child(this._ramGauge);
-      cell.add_child(this._ramLabel);
+      labelBox.add_child(this._ramLabel);
+      labelBox.add_child(this._ramSub);
     } else if (type === "fan") {
       this._fanGauge = new RingGauge({ type: "fan", size: 28, strokeWidth: 2.8 });
       this._fanLabel = new St.Label({
@@ -142,24 +160,16 @@ export default class SparklineMonitorExtension extends Extension {
         style_class: "codenotch-value-label",
         y_align: Clutter.ActorAlign.CENTER,
       });
-      this._fanRpmLabel = new St.Label({
+      this._fanSub = new St.Label({
         text: "",
-        style_class: "codenotch-fan-rpm",
+        style_class: "codenotch-value-sublabel",
         y_align: Clutter.ActorAlign.CENTER,
       });
       cell.add_child(this._fanGauge);
-      cell.add_child(this._fanLabel);
-      cell.add_child(this._fanRpmLabel);
-    } else if (type === "battery") {
-      this._batGauge = new RingGauge({ type: "battery", size: 28, strokeWidth: 2.8 });
-      this._batLabel = new St.Label({
-        text: "–",
-        style_class: "codenotch-value-label",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-      cell.add_child(this._batGauge);
-      cell.add_child(this._batLabel);
+      labelBox.add_child(this._fanLabel);
+      labelBox.add_child(this._fanSub);
     }
+    cell.add_child(labelBox);
     return cell;
   }
 
@@ -221,7 +231,7 @@ export default class SparklineMonitorExtension extends Extension {
   _applyPalette() {
     const mono = this._getBool("mono-palette", false);
     const palette = mono ? "mono" : "codenotch";
-    for (const gauge of [this._cpuGauge, this._ramGauge, this._fanGauge, this._batGauge]) {
+    for (const gauge of [this._cpuGauge, this._ramGauge, this._fanGauge]) {
       if (gauge) gauge.setPalette(palette);
     }
   }
@@ -231,7 +241,6 @@ export default class SparklineMonitorExtension extends Extension {
     const showCpu = this._getBool("show-cpu", true);
     const showRam = this._getBool("show-ram", true);
     const showFan = this._getBool("show-fan", true);
-    const showBattery = this._getBool("show-battery", true);
     const showGpu = this._getBool("show-gpu", true);
     const showNet = this._getBool("show-network", true);
     const showDisk = this._getBool("show-disk", true);
@@ -241,7 +250,6 @@ export default class SparklineMonitorExtension extends Extension {
     if (this._cpuCell) this._cpuCell.visible = !compact && showCpu;
     if (this._ramCell) this._ramCell.visible = !compact && showRam;
     if (this._fanCell) this._fanCell.visible = !compact && showFan;
-    if (this._batCell) this._batCell.visible = !compact && showBattery && this._batPresent;
     if (this._compactDot) this._compactDot.visible = compact;
 
     if (this._menuItems) {
@@ -249,7 +257,6 @@ export default class SparklineMonitorExtension extends Extension {
       this._menuItems.cores.visible = showCpu;
       this._menuItems.ram.visible = showRam;
       this._menuItems.fan.visible = showFan;
-      this._menuItems.battery.visible = showBattery && this._batPresent;
       this._menuItems.history.visible = showHistory;
       this._menuItems.gpu.visible = showGpu;
       this._menuItems.network.visible = showNet;
@@ -366,17 +373,12 @@ export default class SparklineMonitorExtension extends Extension {
     // --- Fan Section ---
     this._menuItems.fan = this._addSection(menu, {
       title: "Cooling Fans",
-      initialVal: "0 RPM (0%)",
+      initialVal: "Detecting…",
     });
+    this._fanTitleLbl = this._menuItems.fan.titleLbl;
     this._fanSubList = new St.BoxLayout({ vertical: true });
     this._fanSubList.add_style_class_name("codenotch-fansublist");
     this._menuItems.fan.container.add_child(this._fanSubList);
-
-    // --- Battery Section ---
-    this._menuItems.battery = this._addSection(menu, {
-      title: "Battery",
-      initialVal: "Detecting…",
-    });
 
     // --- GPU Section ---
     this._menuItems.gpu = this._addSection(menu, {
@@ -570,7 +572,8 @@ export default class SparklineMonitorExtension extends Extension {
   }
 
   /** Keeps `rows` in sync with `dataList` of [name, value] pairs, reusing widgets. */
-  _syncRows(parent, rows, dataList) {
+  _syncRows(parent, rows, dataList, opts = {}) {
+    const valStyle = opts.valStyle || "codenotch-card-subtitle";
     while (rows.length < dataList.length) {
       const rowBox = new St.BoxLayout({
         style_class: "codenotch-card-row",
@@ -581,7 +584,7 @@ export default class SparklineMonitorExtension extends Extension {
         x_expand: true,
       });
       const valLbl = new St.Label({
-        style_class: "codenotch-card-subtitle",
+        style_class: valStyle,
       });
       rowBox.add_child(nameLbl);
       rowBox.add_child(valLbl);
@@ -692,14 +695,12 @@ export default class SparklineMonitorExtension extends Extension {
       this._alertConsec[key] = (this._alertConsec[key] || 0) + 1;
       if (this._alertConsec[key] >= 3 && !this._activeAlerts[key]) {
         this._activeAlerts[key] = label;
-        this._notify(`⚠ ${label}`);
         this._renderAlerts();
       }
     } else if (value <= threshold - 5) {
       this._alertConsec[key] = 0;
       if (this._activeAlerts[key]) {
         delete this._activeAlerts[key];
-        this._notify(`✓ ${label} recovered`);
         this._renderAlerts();
       }
     }
@@ -721,13 +722,6 @@ export default class SparklineMonitorExtension extends Extension {
     }
   }
 
-  _notify(text) {
-    if (typeof Main.notify !== "function") return;
-    try {
-      Main.notify(this.metadata.name, text);
-    } catch (_) {}
-  }
-
   // ----------------------------- Telemetry handling -----------------------------
 
   _handleTelemetryData(rawJson) {
@@ -747,6 +741,12 @@ export default class SparklineMonitorExtension extends Extension {
     if (typeof data.cpu === "number") {
       this._cpuGauge.setValue(data.cpu);
       this._cpuLabel.text = `${Math.round(data.cpu)}%`;
+      if (this._cpuSub) {
+        this._cpuSub.text =
+          this._getBool("show-cpu-temp", true) && typeof data.cpu_temp === "number"
+            ? `${data.cpu_temp}°C`
+            : "";
+      }
       if (this._menuItems.cpu) {
         let text = `${data.cpu.toFixed(1)}%`;
         if (this._getBool("show-cpu-temp", true) && typeof data.cpu_temp === "number") {
@@ -780,49 +780,41 @@ export default class SparklineMonitorExtension extends Extension {
         data.ram_used_gb !== undefined ? `${data.ram_used_gb.toFixed(1)}` : "?";
       const totalGb =
         data.ram_total_gb !== undefined ? `${data.ram_total_gb.toFixed(1)}` : "?";
+      if (this._ramSub) {
+        this._ramSub.text = `${usedGb}G / ${totalGb}G`;
+      }
       if (this._menuItems.ram)
         this._menuItems.ram.valLbl.text = `${usedGb} / ${totalGb} GB (${data.ram.toFixed(1)}%)`;
       this._updateProgressBar(this._menuItems.ram.bar, data.ram / 100.0);
     }
 
     // 3. Fans
+    const fans = Array.isArray(data.fans) ? data.fans : [];
+    if (fans.length > 0 && this._fanTitleLbl) {
+      this._fanTitleLbl.text = fans.length === 1 ? "Cooling Fan" : `Cooling Fans (${fans.length})`;
+    }
     const fanPct = typeof data.fan_pct === "number" ? data.fan_pct : 0;
     const fanRpm = typeof data.fan_rpm === "number" ? data.fan_rpm : 0;
     this._fanGauge.setValue(fanPct);
     this._fanLabel.text = `${fanPct}%`;
+    if (this._fanSub) {
+      this._fanSub.text = fanRpm > 0 ? `${fanRpm} RPM` : "Stopped";
+    }
     if (this._menuItems.fan) {
       if (fanRpm > 0) {
-        this._fanRpmLabel.text = `${fanRpm} RPM`;
         this._menuItems.fan.valLbl.text = `${fanRpm} RPM (${fanPct}%)`;
       } else {
-        this._fanRpmLabel.text = fanPct > 0 ? "" : "Idle";
         this._menuItems.fan.valLbl.text = fanPct > 0 ? `${fanPct}%` : "Idle / Stopped";
       }
       this._updateProgressBar(this._menuItems.fan.bar, fanPct / 100.0);
     }
 
-    // Fan sublist (rows reused, no more rebuilds every tick)
-    const fanRows = Array.isArray(data.fans)
-      ? data.fans.map((f) => [
-          f.label || "Fan",
-          f.rpm > 0 ? `${f.rpm} RPM (${f.pct}%)` : `${f.pct}%`,
-        ])
-      : [];
-    this._syncRows(this._fanSubList, this._fanRows, fanRows);
-
-    // 3b. Battery
-    if (typeof data.bat_pct === "number") {
-      const wasPresent = this._batPresent;
-      this._batPresent = true;
-      if (!wasPresent) this._applyUiSettings();
-      this._batGauge.setValue(data.bat_pct);
-      this._batLabel.text = `${data.bat_pct}%`;
-      if (this._menuItems.battery) {
-        const status = typeof data.bat_status === "string" ? data.bat_status : "—";
-        this._menuItems.battery.valLbl.text = `${status}  ·  ${data.bat_pct}%`;
-        this._updateProgressBar(this._menuItems.battery.bar, data.bat_pct / 100.0);
-      }
-    }
+    // Fan sublist — one vertical block per fan (name on top, RPM + % below)
+    const fanRows = fans.map((f) => [
+      f.label || "Fan",
+      f.rpm > 0 ? `${f.rpm} RPM  ·  ${f.pct}%` : `${f.pct}%`,
+    ]);
+    this._syncRows(this._fanSubList, this._fanRows, fanRows, { valStyle: "codenotch-card-val" });
 
     // 4. GPU
     if (this._menuItems.gpu) {
@@ -1258,7 +1250,6 @@ export default class SparklineMonitorExtension extends Extension {
     addSwitchRow("CPU (panel + card)", "show-cpu");
     addSwitchRow("RAM (panel + card)", "show-ram");
     addSwitchRow("Cooling fans (panel + card)", "show-fan");
-    addSwitchRow("Battery (panel + card)", "show-battery");
     addSwitchRow("CPU temperature (in CPU row)", "show-cpu-temp");
     addSwitchRow("History overview (card)", "show-history");
     addSwitchRow("GPU (card)", "show-gpu");
@@ -1349,10 +1340,13 @@ export default class SparklineMonitorExtension extends Extension {
       this._indicator = null;
     }
 
+    try {
+      Main.panel.remove_style_class_name("codenotch-vertical-panel");
+    } catch (_) {}
+
     this._cpuGauge = null;
     this._ramGauge = null;
     this._fanGauge = null;
-    this._batGauge = null;
     this._cpuSpark = null;
     this._gpuSpark = null;
     this._historySpark = null;

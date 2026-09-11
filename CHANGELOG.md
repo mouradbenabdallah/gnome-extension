@@ -1,5 +1,21 @@
 # Changelog
 
+## Working tree — vertical panel + fan detection + battery removed (2026-09-11)
+
+- **Vertical layout (Panel v5, actually deployed)** — the top-panel capsule is
+  now a true vertical stack of three metric rows (CPU / RAM / Fan), each row is a
+  ring gauge next to a two-line label (percent + detail: °C / GB used-total /
+  RPM). The top panel grows taller via the scoped
+  `#panel.codenotch-vertical-panel` style so all three metrics are visible at
+  once; subtle separators divide the rows. Requires log out/in on Wayland.
+- **Fan detection (1+ fans)** — the daemon now filters phantom hwmon channels
+  that read 0 RPM forever (e.g. `msi_wmi_platform fan2..fan4` on MSI laptops),
+  so the panel correctly reports "Cooling Fan" (1 fan) or "Cooling Fans (N)".
+  Single-fan systems are labeled `CPU Fan` instead of the raw chip name.
+- **Battery removed** — battery ring cell, card section, `show-battery`
+  preference, the daemon `bat.rs` module and `bat_pct`/`bat_status` telemetry
+  fields were all removed.
+
 ## Version 4 — "All eight" improvement round (2026-09-11)
 
 Implemented all eight requested improvements: battery + CPU temp, pause-while-locked,

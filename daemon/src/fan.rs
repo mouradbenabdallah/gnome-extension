@@ -96,6 +96,12 @@ impl FanCollector {
                 }
             }
         }
+
+        // Single-fan systems (e.g. laptops) rarely expose a friendly label;
+        // default to the CPU fan name so the panel reads "CPU Fan".
+        if self.hwmon_fans.len() == 1 {
+            self.hwmon_fans[0].label = "CPU Fan".to_string();
+        }
     }
 
     pub fn sample(&mut self, nvml_fan_pct: Option<u32>) -> (u32, u32, Vec<FanMetric>) {
@@ -112,6 +118,13 @@ impl FanCollector {
         for fan in &self.hwmon_fans {
             if let Ok(content) = fs::read_to_string(&fan.input_path) {
                 if let Ok(rpm) = content.trim().parse::<u32>() {
+                    // Some laptops expose phantom fan channels that read 0 RPM
+                    // forever (e.g. msi_wmi_platform fan2..fan4). Only count
+                    // real, spinning fans so "1 or more fans" detection works.
+                    if rpm == 0 {
+                        continue;
+                    }
+
                     let pct = ((rpm as f32 / fan.max_rpm as f32) * 100.0).clamp(0.0, 100.0).round() as u32;
                     if rpm > highest_rpm {
                         highest_rpm = rpm;
@@ -129,22 +142,30 @@ impl FanCollector {
             }
         }
 
+        // On single-fan laptops (the common case) use a friendly label instead
+        // of the raw hwmon chip name (e.g. "msi_wmi_platform Fan 1").
+        if metrics.len() == 1 && !metrics[0].label.to_lowercase().contains("gpu") {
+            metrics[0].label = "CPU Fan".to_string();
+        }
+
         // Incorporate NVML GPU fan if available and not already reported in hwmon
         if let Some(gpu_pct) = nvml_fan_pct {
-            let has_gpu_fan = metrics.iter().any(|m| m.label.to_lowercase().contains("gpu"));
-            if !has_gpu_fan {
-                let estimated_rpm = (gpu_pct as f32 * 50.0).round() as u32; // ~5000 RPM max scale
-                if gpu_pct > highest_pct {
-                    highest_pct = gpu_pct;
+            if gpu_pct > 0 {
+                let has_gpu_fan = metrics.iter().any(|m| m.label.to_lowercase().contains("gpu"));
+                if !has_gpu_fan {
+                    let estimated_rpm = (gpu_pct as f32 * 50.0).round() as u32; // ~5000 RPM max scale
+                    if gpu_pct > highest_pct {
+                        highest_pct = gpu_pct;
+                    }
+                    if estimated_rpm > highest_rpm {
+                        highest_rpm = estimated_rpm;
+                    }
+                    metrics.push(FanMetric {
+                        label: "GPU Fan".to_string(),
+                        rpm: estimated_rpm,
+                        pct: gpu_pct,
+                    });
                 }
-                if estimated_rpm > highest_rpm {
-                    highest_rpm = estimated_rpm;
-                }
-                metrics.push(FanMetric {
-                    label: "GPU Fan".to_string(),
-                    rpm: estimated_rpm,
-                    pct: gpu_pct,
-                });
             }
         }
 

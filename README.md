@@ -1,19 +1,18 @@
 # Codenotch System Monitor (Rust + GNOME Shell Extension)
 
 A macOS-style, high-performance system monitor extension for GNOME Shell
-(GNOME 45 – 50). A native Rust daemon feeds a jet-black top-panel capsule with
-animated circular ring gauges, and a frosted macOS-style popover card with
-Activity-Monitor-style live graphs.
+(GNOME 45 – 50). A native Rust daemon feeds a jet-black **vertical** top-panel
+capsule with animated circular ring gauges, and a frosted macOS-style popover
+card with Activity-Monitor-style live graphs.
 
 Features:
 
 - **CPU %** — microprocessor glyph + clockwise progress arc, smooth eased transitions
 - **CPU temperature** — package temp next to the CPU %, with its own alert channel
 - **RAM %** — memory DIMM glyph + arc, used/total in GB
-- **Cooling Fans** — spinning propeller glyph, RPM / % breakdown (rows are reused, not rebuilt)
+- **Cooling Fans** — spinning propeller glyph, RPM / % breakdown (rows are reused, not rebuilt); auto-detects whether the PC has 1 or more fans
 - **Per-core CPU grid** — one mini bar per core, colored by load
 - **GPU** — NVIDIA (NVML) plus **AMD / Intel** (sysfs) support with util % + temp + history graph
-- **Battery** — ring gauge + status on laptops (hidden on desktops)
 - **Network** — live download/upload KB·s⁻¹ sparklines
 - **Disk I/O** — read/write throughput sparklines
 - **Top processes** — top 3 CPU consumers
@@ -62,7 +61,6 @@ gnome-sparkline-monitor/
 │       ├── net.rs             # /proc/net/dev rx/tx rates
 │       ├── disk.rs            # /proc/diskstats read/write rates (NVMe-aware)
 │       ├── process.rs         # /proc/<pid>/stat top-N CPU processes
-│       ├── bat.rs             # /sys/class/power_supply/BAT* battery state
 │       └── thermal.rs         # CPU package temperature via hwmon
 ├── extension/                 # GNOME Shell ESM extension (GNOME 45+)
 │   ├── metadata.json
@@ -86,7 +84,7 @@ cargo run -- --interval-ms 1000          # NDJSON to stdout
 cargo test                               # parser + protocol unit tests
 ```
 
-Socket/control protocol smoke test (real battery/temp data on laptops):
+Socket/control protocol smoke test (real temp/fan data on laptops):
 
 ```bash
 daemon/target/release/sparkline-daemon --listen /tmp/cm.sock &

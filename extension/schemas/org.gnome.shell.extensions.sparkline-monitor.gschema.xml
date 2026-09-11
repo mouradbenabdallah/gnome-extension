@@ -41,12 +41,7 @@
         <key name="show-fan" type="b">
             <default>true</default>
             <summary>Show fans</summary>
-            <description>Show the cooling fan gauge and details.</description>
-        </key>
-        <key name="show-battery" type="b">
-            <default>true</default>
-            <summary>Show battery</summary>
-            <description>Show the battery ring gauge on laptops (hidden on desktops without a battery).</description>
+            <description>Show the cooling fan gauge and details (auto-detects 1 or more fans).</description>
         </key>
         <key name="show-cpu-temp" type="b">
             <default>true</default>
