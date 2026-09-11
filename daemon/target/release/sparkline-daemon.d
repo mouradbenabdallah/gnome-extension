@@ -1,0 +1,1 @@
+/home/admin/Downloads/gnome-extension/daemon/target/release/sparkline-daemon: /home/admin/Downloads/gnome-extension/daemon/src/cpu.rs /home/admin/Downloads/gnome-extension/daemon/src/fan.rs /home/admin/Downloads/gnome-extension/daemon/src/gpu.rs /home/admin/Downloads/gnome-extension/daemon/src/main.rs /home/admin/Downloads/gnome-extension/daemon/src/mem.rs

@@ -58,6 +58,10 @@
     spacing: 8px;
 }
 
+.codenotch-fansublist {
+    spacing: 2px;
+}
+
 .codenotch-card-label {
     font-size: 8.5pt;
     color: rgba(255, 255, 255, 0.65);

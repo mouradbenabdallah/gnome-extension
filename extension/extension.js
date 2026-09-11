@@ -8,6 +8,7 @@ import Gio from "gi://Gio";
 import GLib from "gi://GLib";
 
 import { RingGauge } from "./ring_gauge.js";
+import { Sparkline } from "./sparkline.js";
 
 export default class SparklineMonitorExtension extends Extension {
   enable() {
@@ -103,6 +104,8 @@ export default class SparklineMonitorExtension extends Extension {
   _buildCodenotchCard() {
     const menu = this._indicator.menu;
     menu.box.add_style_class_name("codenotch-card-menu");
+    menu.actor.add_style_class_name("codenotch-menu-boxpointer");
+    menu.connect("open-state-changed", this._onMenuStateChanged.bind(this));
 
     // Header Title
     const headerItem = new PopupMenu.PopupBaseMenuItem({
@@ -111,11 +114,11 @@ export default class SparklineMonitorExtension extends Extension {
     });
     const headerBox = new St.BoxLayout({ vertical: true });
     const titleLabel = new St.Label({
-      text: "System Telemetry",
+      text: "System Monitor",
       style_class: "codenotch-card-header",
     });
     const subLabel = new St.Label({
-      text: "Codenotch Hardware Monitor",
+      text: "Live Hardware Telemetry",
       style_class: "codenotch-card-subtitle",
     });
     headerBox.add_child(titleLabel);
@@ -161,8 +164,16 @@ export default class SparklineMonitorExtension extends Extension {
     });
     cpuTrack.add_child(this._cardCpuBar);
 
+    const cpuSparkWrap = new St.BoxLayout({
+      style_class: "codenotch-sparkline-wrap",
+      x_expand: true,
+    });
+    this._cpuSpark = new Sparkline({ color: "#5bc0ff", width: 190, height: 22 });
+    cpuSparkWrap.add_child(this._cpuSpark);
+
     cpuContainer.add_child(cpuRow);
     cpuContainer.add_child(cpuTrack);
+    cpuContainer.add_child(cpuSparkWrap);
     cpuItem.add_child(cpuContainer);
     menu.addMenuItem(cpuItem);
 
@@ -243,7 +254,8 @@ export default class SparklineMonitorExtension extends Extension {
     });
     fanTrack.add_child(this._cardFanBar);
 
-    this._cardFanSubList = new St.BoxLayout({ vertical: true, spacing: 2 });
+    this._cardFanSubList = new St.BoxLayout({ vertical: true });
+    this._cardFanSubList.add_style_class_name("codenotch-fansublist");
 
     fanContainer.add_child(fanRow);
     fanContainer.add_child(fanTrack);
@@ -251,11 +263,54 @@ export default class SparklineMonitorExtension extends Extension {
     fanItem.add_child(fanContainer);
     menu.addMenuItem(fanItem);
 
-    // --- Optional GPU Section ---
-    this._gpuMenuItem = new PopupMenu.PopupMenuItem("GPU: Detecting...", {
+    // --- GPU Detail Section ---
+    const gpuItem = new PopupMenu.PopupBaseMenuItem({
       reactive: false,
+      can_focus: false,
     });
-    menu.addMenuItem(this._gpuMenuItem);
+    const gpuContainer = new St.BoxLayout({
+      vertical: true,
+      style_class: "codenotch-card-section",
+      x_expand: true,
+    });
+    const gpuRow = new St.BoxLayout({
+      style_class: "codenotch-card-row",
+      x_expand: true,
+    });
+    const gpuTitle = new St.Label({
+      text: "NVIDIA GPU",
+      style_class: "codenotch-card-label",
+      x_expand: true,
+    });
+    this._cardGpuVal = new St.Label({
+      text: "Detecting…",
+      style_class: "codenotch-card-val",
+    });
+    gpuRow.add_child(gpuTitle);
+    gpuRow.add_child(this._cardGpuVal);
+
+    const gpuTrack = new St.BoxLayout({
+      style_class: "codenotch-progress-track",
+      x_expand: true,
+    });
+    this._cardGpuBar = new St.Widget({
+      style_class: "codenotch-progress-fill codenotch-fill-ample",
+      width: 0,
+    });
+    gpuTrack.add_child(this._cardGpuBar);
+
+    const gpuSparkWrap = new St.BoxLayout({
+      style_class: "codenotch-sparkline-wrap",
+      x_expand: true,
+    });
+    this._gpuSpark = new Sparkline({ color: "#00ff88", width: 190, height: 22 });
+    gpuSparkWrap.add_child(this._gpuSpark);
+
+    gpuContainer.add_child(gpuRow);
+    gpuContainer.add_child(gpuTrack);
+    gpuContainer.add_child(gpuSparkWrap);
+    gpuItem.add_child(gpuContainer);
+    menu.addMenuItem(gpuItem);
 
     menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -265,6 +320,54 @@ export default class SparklineMonitorExtension extends Extension {
       this._restartDaemon();
     });
     menu.addMenuItem(restartItem);
+  }
+
+  _onMenuStateChanged(menu, open) {
+    const content = menu.box;
+
+    if (open) {
+      // Re-trigger: kill any in-flight fade/shrink from a previous close.
+      content.remove_all_transitions();
+      content.set_pivot_point(0.5, 0);
+      content.scale_x = 0.88;
+      content.scale_y = 0.88;
+      content.opacity = 0;
+      content.translation_y = -10;
+      content.ease_property("opacity", 255, {
+        duration: 200,
+        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+      });
+      content.ease_property("scale-x", 1, {
+        duration: 360,
+        mode: Clutter.AnimationMode.EASE_OUT_BACK,
+      });
+      content.ease_property("scale-y", 1, {
+        duration: 360,
+        mode: Clutter.AnimationMode.EASE_OUT_BACK,
+      });
+      content.ease_property("translation-y", 0, {
+        duration: 280,
+        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+      });
+    } else {
+      content.remove_all_transitions();
+      content.ease_property("opacity", 0, {
+        duration: 130,
+        mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+      });
+      content.ease_property("scale-x", 0.92, {
+        duration: 160,
+        mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+      });
+      content.ease_property("scale-y", 0.92, {
+        duration: 160,
+        mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+      });
+      content.ease_property("translation-y", 6, {
+        duration: 160,
+        mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+      });
+    }
   }
 
   _updateProgressBar(widget, fraction) {
@@ -377,6 +480,7 @@ export default class SparklineMonitorExtension extends Extension {
         this._cpuLabel.text = `${Math.round(data.cpu)}%`;
         this._cardCpuVal.text = `${data.cpu.toFixed(1)}%`;
         this._updateProgressBar(this._cardCpuBar, data.cpu / 100.0);
+        if (this._cpuSpark) this._cpuSpark.pushValue(data.cpu);
       }
 
       // 2. Update RAM
@@ -435,16 +539,21 @@ export default class SparklineMonitorExtension extends Extension {
       }
 
       // 4. Update GPU
-      if (data.gpu_util !== undefined && data.gpu_util !== null) {
+      if (this._cardGpuBar && this._cardGpuVal && this._gpuSpark) {
+        const gpuUtil =
+          typeof data.gpu_util === "number" && data.gpu_util !== null
+            ? data.gpu_util
+            : 0;
         const temp =
-          data.gpu_temp !== undefined && data.gpu_temp !== null
+          typeof data.gpu_temp === "number" && data.gpu_temp !== null
             ? `${data.gpu_temp}°C`
             : "--°C";
-        this._gpuMenuItem.label.text = `NVIDIA GPU: ${data.gpu_util}% (${temp})`;
-        this._gpuMenuItem.visible = true;
-      } else {
-        this._gpuMenuItem.label.text = "NVIDIA GPU: Standby / Sleep";
-        this._gpuMenuItem.visible = true;
+        const actionable = typeof data.gpu_util === "number";
+        this._cardGpuVal.text = actionable
+          ? `${data.gpu_util}%  ·  ${temp}`
+          : `Standby / Sleep  ·  ${temp}`;
+        this._updateProgressBar(this._cardGpuBar, gpuUtil / 100.0);
+        this._gpuSpark.pushValue(gpuUtil);
       }
     } catch (e) {
       // Ignore malformed chunks
