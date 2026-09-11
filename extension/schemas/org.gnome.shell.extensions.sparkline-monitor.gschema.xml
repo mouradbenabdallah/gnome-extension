@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist gettext-domain="gnome-shell-extensions">
+    <schema id="org.gnome.shell.extensions.sparkline-monitor"
+            path="/org/gnome/shell/extensions/sparkline-monitor/">
+        <key name="poll-interval" type="i">
+            <range min="200" max="10000"/>
+            <default>1200</default>
+            <summary>Telemetry poll interval</summary>
+            <description>Milliseconds between telemetry updates from the Rust daemon.</description>
+        </key>
+        <key name="animate-popover" type="b">
+            <default>true</default>
+            <summary>Animate popover</summary>
+            <description>Play a springy scale/fade animation when the popover opens and closes.</description>
+        </key>
+        <key name="compact-mode" type="b">
+            <default>false</default>
+            <summary>Compact mode</summary>
+            <description>Replace the panel gauges with a single status dot.</description>
+        </key>
+        <key name="mono-palette" type="b">
+            <default>false</default>
+            <summary>Monochrome palette</summary>
+            <description>Use a single accent color for the ring gauges instead of the load-based color spectrum.</description>
+        </key>
+        <key name="pause-away" type="b">
+            <default>true</default>
+            <summary>Pause while locked</summary>
+            <description>Pause telemetry sampling while the machine is locked or idle, saving battery and CPU.</description>
+        </key>
+        <key name="show-cpu" type="b">
+            <default>true</default>
+            <summary>Show CPU</summary>
+            <description>Show the CPU gauge and details.</description>
+        </key>
+        <key name="show-ram" type="b">
+            <default>true</default>
+            <summary>Show RAM</summary>
+            <description>Show the RAM gauge and details.</description>
+        </key>
+        <key name="show-fan" type="b">
+            <default>true</default>
+            <summary>Show fans</summary>
+            <description>Show the cooling fan gauge and details.</description>
+        </key>
+        <key name="show-battery" type="b">
+            <default>true</default>
+            <summary>Show battery</summary>
+            <description>Show the battery ring gauge on laptops (hidden on desktops without a battery).</description>
+        </key>
+        <key name="show-cpu-temp" type="b">
+            <default>true</default>
+            <summary>Show CPU temperature</summary>
+            <description>Show the CPU package temperature next to the CPU percentage.</description>
+        </key>
+        <key name="show-history" type="b">
+            <default>true</default>
+            <summary>Show history overview</summary>
+            <description>Show a ~30 second CPU history overview in the popover.</description>
+        </key>
+        <key name="show-gpu" type="b">
+            <default>true</default>
+            <summary>Show GPU</summary>
+            <description>Show the GPU section in the popover.</description>
+        </key>
+        <key name="show-network" type="b">
+            <default>true</default>
+            <summary>Show network</summary>
+            <description>Show the network throughput graphs in the popover.</description>
+        </key>
+        <key name="show-disk" type="b">
+            <default>true</default>
+            <summary>Show disk I/O</summary>
+            <description>Show the disk throughput graphs in the popover.</description>
+        </key>
+        <key name="show-processes" type="b">
+            <default>true</default>
+            <summary>Show top processes</summary>
+            <description>Show the top CPU-consuming processes in the popover.</description>
+        </key>
+        <key name="notify-load" type="b">
+            <default>true</default>
+            <summary>Load alerts</summary>
+            <description>Notify when CPU or GPU are sustained above the alert thresholds.</description>
+        </key>
+        <key name="cpu-alert" type="d">
+            <range min="20.0" max="100.0"/>
+            <default>85.0</default>
+            <summary>CPU alert threshold (%)</summary>
+            <description>Alert when average CPU load stays above this percentage.</description>
+        </key>
+        <key name="gpu-alert" type="d">
+            <range min="20.0" max="100.0"/>
+            <default>90.0</default>
+            <summary>GPU util alert threshold (%)</summary>
+            <description>Alert when GPU utilization stays above this percentage.</description>
+        </key>
+        <key name="temp-alert" type="d">
+            <range min="30.0" max="120.0"/>
+            <default>85.0</default>
+            <summary>GPU temperature alert (°C)</summary>
+            <description>Alert when GPU temperature stays above this value.</description>
+        </key>
+    </schema>
+</schemalist>

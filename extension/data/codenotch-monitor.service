@@ -1,0 +1,14 @@
+[Unit]
+Description=Codenotch telemetry daemon (sparkline-monitor)
+# Start after the graphical session is up; the shell extension connects to
+# the Unix socket we bind in %t/ (the user runtime dir).
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/share/gnome-shell/extensions/sparkline-monitor@local/bin/sparkline-daemon --listen %t/codenotch-monitor.service.sock
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

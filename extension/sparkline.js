@@ -27,6 +27,7 @@ class Sparkline extends St.DrawingArea {
         this._color = this._parseHexColor(color);
         this._warnColor = { r: 0.96, g: 0.62, b: 0.07 }; // #f59e0b
         this._alertColor = { r: 0.94, g: 0.27, b: 0.27 }; // #ef4444
+        this._peak = 0.0; // Auto-scaling peak so raw units (KB/s) graph nicely
     }
 
     _parseHexColor(hex) {
@@ -43,9 +44,23 @@ class Sparkline extends St.DrawingArea {
     }
 
     pushValue(val) {
-        const clamped = Math.max(0.0, Math.min(100.0, Number(val) || 0.0));
+        const v = Math.max(0.0, Number(val) || 0.0);
         this._history.shift();
-        this._history.push(clamped);
+        this._history.push(v);
+        // Slowly track the peak so short spikes don't crush the baseline.
+        this._peak = Math.max(v, this._peak * 0.97);
+        this.queue_repaint();
+    }
+
+    /** Replaces the whole history window with `values` (e.g. a 30s overview). */
+    setData(values) {
+        const list = Array.from(values ?? [], (v) => Math.max(0.0, Number(v) || 0.0));
+        if (list.length > this._maxPoints) {
+            this._history = list.slice(list.length - this._maxPoints);
+        } else {
+            this._history = new Array(this._maxPoints - list.length).fill(0.0).concat(list);
+        }
+        this._peak = Math.max(...this._history, this._peak * 0.97, 1.0);
         this.queue_repaint();
     }
 
@@ -64,6 +79,7 @@ class Sparkline extends St.DrawingArea {
         cr.setOperator(cairo.Operator.OVER);
 
         const len = this._history.length;
+        const maxVal = Math.max(this._peak, 1.0);
         if (len < 2) {
             cr.$dispose();
             return;
@@ -76,17 +92,18 @@ class Sparkline extends St.DrawingArea {
         const points = [];
         for (let i = 0; i < len; i++) {
             const x = i * stepX;
-            const normalized = this._history[i] / 100.0;
+            const normalized = Math.min(1.0, this._history[i] / maxVal);
             const y = (h - paddingY) - (normalized * usableH);
             points.push({ x, y });
         }
 
-        // Determine dynamic line color based on the most recent reading
+        // Determine dynamic line color based on the most recent reading.
         const latestVal = this._history[len - 1];
+        const latestFrac = latestVal / maxVal;
         let activeColor = this._color;
-        if (latestVal >= 88.0) {
+        if (latestFrac >= 0.88) {
             activeColor = this._alertColor;
-        } else if (latestVal >= 70.0) {
+        } else if (latestFrac >= 0.7) {
             activeColor = this._warnColor;
         }
 

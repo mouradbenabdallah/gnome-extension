@@ -1,13 +1,20 @@
-/* Codenotch Top Panel Capsule & Tooltip Card Styling */
+/* Codenotch Top Panel Capsule & macOS-style Tooltip Card Styling */
 
+/* --- Top Panel "Notch" Capsule (macOS menu-bar extra feel) --- */
 .codenotch-notch-box {
-    background-color: #000000;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 18px;
-    padding: 2px 8px;
-    spacing: 10px;
+    background-color: rgba(12, 12, 15, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 2px 9px;
+    spacing: 9px;
     margin: 2px 4px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10),
+        0 2px 8px rgba(0, 0, 0, 0.45);
+}
+
+.codenotch-notch-box:hover {
+    border-color: rgba(255, 255, 255, 0.34);
+    background-color: rgba(16, 16, 20, 0.90);
 }
 
 .codenotch-metric-cell {
@@ -16,42 +23,50 @@
 
 .codenotch-value-label {
     font-size: 8.5pt;
-    font-weight: 700;
-    color: #ffffff;
-    margin-left: 2px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.96);
+    margin-left: 3px;
 }
 
 .codenotch-fan-rpm {
     font-size: 7.5pt;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.75);
+    color: rgba(255, 255, 255, 0.7);
     margin-left: 1px;
 }
 
-/* Codenotch Hover / Popover Card */
+/* --- Popover BoxPointer arrow (scoped to this menu only) --- */
+.codenotch-menu-boxpointer {
+    -arrow-background-color: rgba(24, 24, 28, 0.92);
+    -arrow-border-color: rgba(255, 255, 255, 0.14);
+    -arrow-border-radius: 10px;
+}
+
+/* --- macOS "frosted glass" Popover Card --- */
 .codenotch-card-menu {
-    border-radius: 16px;
-    background-color: #000000 !important;
-    border: 1px solid rgba(255, 255, 255, 0.16) !important;
-    padding: 10px 14px !important;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.75) !important;
+    border-radius: 20px;
+    background-color: rgba(24, 24, 28, 0.88) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
+    padding: 14px 16px !important;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.65),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
 }
 
 .codenotch-card-header {
-    font-size: 10.5pt;
+    font-size: 11pt;
     font-weight: 700;
     color: #ffffff;
-    margin-bottom: 4px;
+    margin-bottom: 3px;
 }
 
 .codenotch-card-subtitle {
     font-size: 8pt;
-    color: rgba(255, 255, 255, 0.55);
+    color: rgba(255, 255, 255, 0.5);
 }
 
 .codenotch-card-section {
-    spacing: 4px;
-    margin: 6px 0;
+    spacing: 5px;
+    margin: 7px 0;
 }
 
 .codenotch-card-row {
@@ -64,7 +79,7 @@
 
 .codenotch-card-label {
     font-size: 8.5pt;
-    color: rgba(255, 255, 255, 0.65);
+    color: rgba(255, 255, 255, 0.62);
 }
 
 .codenotch-card-val {
@@ -73,17 +88,17 @@
     color: #ffffff;
 }
 
-/* Horizontal Progress Bars in Codenotch Tooltip */
+/* --- Horizontal Progress Bars (macOS Activity-Monitor style) --- */
 .codenotch-progress-track {
-    height: 6px;
-    border-radius: 3px;
-    background-color: rgba(255, 255, 255, 0.18);
-    margin: 3px 0 5px 0;
+    height: 7px;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.14);
+    margin: 4px 0 6px 0;
 }
 
 .codenotch-progress-fill {
-    height: 6px;
-    border-radius: 3px;
+    height: 7px;
+    border-radius: 4px;
 }
 
 .codenotch-fill-ample {
@@ -100,6 +115,24 @@
 
 .codenotch-fill-exhausted {
     background-color: #FF453A;
+}
+
+/* --- Sparkline history strip --- */
+.codenotch-sparkline-wrap {
+    margin: 1px 0 5px 0;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.codenotch-sparkline-pair-wrap {
+    margin: 1px 0 5px 0;
+    padding: 6px 8px;
+    border-radius: 10px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    spacing: 8px;
 }
 
 .codenotch-separator {
@@ -119,4 +152,49 @@
 .codenotch-button:hover {
     background-color: rgba(255, 255, 255, 0.16);
     color: #ffffff;
+}
+
+/* --- Alert banner (shown under the header when load is critical) --- */
+.codenotch-alert-banner {
+    margin-top: 6px;
+    padding: 4px 10px;
+    border-radius: 8px;
+    background-color: rgba(255, 63, 0, 0.22);
+    border: 1px solid rgba(255, 63, 0, 0.55);
+    color: #ff8a6b;
+    font-size: 8.5pt;
+    font-weight: 700;
+}
+
+/* --- Compact-mode status dot --- */
+.codenotch-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 5px;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+}
+
+/* --- Per-core CPU grid --- */
+.codenotch-core-row {
+    spacing: 6px;
+    margin: 2px 0;
+}
+
+.codenotch-core-track {
+    width: 40px;
+    height: 44px;
+    padding: 3px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.06);
+}
+
+.codenotch-core-fill {
+    width: 34px;
+    border-radius: 3px;
+}
+
+.codenotch-core-num {
+    font-size: 6.5pt;
+    color: rgba(255, 255, 255, 0.4);
+    text-align: center;
 }

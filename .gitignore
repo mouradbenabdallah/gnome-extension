@@ -1,0 +1,14 @@
+# Rust
+/daemon/target/
+*.rs.bk
+
+# Packaged bundles
+/build/
+
+# Editor / OS
+.vscode/
+*.swp
+.DS_Store
+
+# Logs / misc
+aa.md

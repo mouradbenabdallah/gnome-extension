@@ -1,5 +1,6 @@
 import GObject from 'gi://GObject';
 import St from 'gi://St';
+import GLib from 'gi://GLib';
 import cairo from 'cairo';
 
 /**
@@ -14,6 +15,13 @@ const PALETTE = {
     glyphIdle: { r: 1.0, g: 1.0, b: 1.0, a: 0.82 },
 };
 
+// Apple-style monochrome accent used for all load bands.
+const PALETTE_MONO = {
+    ringTrack: { r: 1.0, g: 1.0, b: 1.0, a: 0.16 },
+    band:      { r: 0.49, g: 0.65, b: 1.0, a: 1.0 },   // #7DA6FF
+    glyphIdle: { r: 1.0, g: 1.0, b: 1.0, a: 0.82 },
+};
+
 export const RingGauge = GObject.registerClass(
 class RingGauge extends St.DrawingArea {
     _init(params = {}) {
@@ -21,6 +29,7 @@ class RingGauge extends St.DrawingArea {
             type = 'cpu',      // 'cpu', 'ram', or 'fan'
             size = 30,
             strokeWidth = 3.0,
+            palette = 'codenotch',
             ...rest
         } = params;
 
@@ -36,24 +45,100 @@ class RingGauge extends St.DrawingArea {
         this._type = type;
         this._size = size;
         this._strokeWidth = strokeWidth;
-        this._value = 0.0;     // 0.0 to 100.0
-        this._fanAngle = 0.0;  // Rotation angle for fan blades
+        this._palette = palette;
+        this._value = 0.0;        // Animated (displayed) value, 0.0 to 100.0
+        this._targetValue = 0.0;  // Desired value, 0.0 to 100.0
+        this._fanAngle = 0.0;     // Rotation angle for fan blades
+        this._animSource = 0;     // Smooth value interpolation timer
+        this._fanSource = 0;      // Continuous fan blade spin timer
+
+        this.connect('destroy', () => this._stopAnimSources());
     }
 
     setValue(val) {
-        const clamped = Math.max(0.0, Math.min(100.0, Number(val) || 0.0));
-        this._value = clamped;
+        const target = Math.max(0.0, Math.min(100.0, Number(val) || 0.0));
+        this._targetValue = target;
 
-        // If this is a fan gauge, spin the blades proportional to speed
-        if (this._type === 'fan' && clamped > 0) {
-            const speedFactor = 0.15 + (clamped / 100.0) * 0.45;
-            this._fanAngle = (this._fanAngle + speedFactor) % (Math.PI * 2);
+        // Fan blades spin continuously while the fan is moving.
+        if (this._type === 'fan') {
+            if (target > 0)
+                this._ensureFanSpin();
+            else
+                this._stopFanSpin();
         }
 
+        // Animate the ring arc smoothly toward the target value.
+        if (!this._animSource) {
+            if (Math.abs(this._value - this._targetValue) < 0.2) {
+                this._value = this._targetValue;
+                this.queue_repaint();
+                return;
+            }
+            this._animSource = GLib.timeout_add(
+                GLib.PRIORITY_DEFAULT,
+                32,
+                () => this._animateStep()
+            );
+        }
+    }
+
+    _ensureFanSpin() {
+        if (this._fanSource)
+            return;
+
+        this._fanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
+            const pct = this._value / 100.0;
+            if (pct <= 0.001) {
+                this._stopFanSpin();
+                return GLib.SOURCE_REMOVE;
+            }
+            // Gentle idle rotation that speeds up with fan %, ~1-2 rev/s
+            const step = 0.05 + pct * 0.38;
+            this._fanAngle = (this._fanAngle + step) % (Math.PI * 2);
+            this.queue_repaint();
+            return GLib.SOURCE_CONTINUE;
+        });
+    }
+
+    _stopFanSpin() {
+        if (this._fanSource) {
+            GLib.source_remove(this._fanSource);
+            this._fanSource = 0;
+        }
+    }
+
+    _animateStep() {
+        const diff = this._targetValue - this._value;
+        if (Math.abs(diff) <= 0.15) {
+            this._value = this._targetValue;
+            this._animSource = 0;
+            this.queue_repaint();
+            return GLib.SOURCE_REMOVE;
+        }
+        this._value += diff * 0.18;
         this.queue_repaint();
+        return GLib.SOURCE_CONTINUE;
+    }
+
+    _stopAnimSources() {
+        this._stopFanSpin();
+        if (this._animSource) {
+            GLib.source_remove(this._animSource);
+            this._animSource = 0;
+        }
+    }
+
+    setPalette(palette) {
+        if (this._palette !== palette) {
+            this._palette = palette;
+            this.queue_repaint();
+        }
     }
 
     _getBandColor(fraction) {
+        if (this._palette === 'mono') {
+            return PALETTE_MONO.band;
+        }
         if (fraction < 0.50) {
             return PALETTE.ample;
         } else if (fraction < 0.75) {
@@ -141,6 +226,8 @@ class RingGauge extends St.DrawingArea {
             this._drawRamGlyph(cr);
         } else if (this._type === 'fan') {
             this._drawFanGlyph(cr);
+        } else if (this._type === 'battery') {
+            this._drawBatteryGlyph(cr);
         }
 
         cr.restore();
@@ -251,5 +338,33 @@ class RingGauge extends St.DrawingArea {
             );
             cr.stroke();
         }
+    }
+
+    _drawBatteryGlyph(cr) {
+        // Thin battery silhouette (body + positive terminal nub)
+        const w = 10.0;
+        const h = 5.0;
+        const halfW = w / 2.0;
+        const halfH = h / 2.0;
+
+        cr.setLineWidth(1.1);
+        cr.setLineCap(cairo.LineCap.ROUND);
+
+        // Body
+        cr.rectangle(-halfW, -halfH, w, h);
+        cr.stroke();
+
+        // Capacity fill indicator (scales with charge %)
+        const frac = this._value / 100.0;
+        if (frac > 0.01) {
+            const inner = 1.0;
+            const fillW = (w - inner * 2.0) * Math.min(1.0, frac);
+            cr.rectangle(-halfW + inner, -halfH + inner, Math.max(fillW, 0.5), h - inner * 2.0);
+            cr.fill();
+        }
+
+        // Positive terminal nub
+        cr.rectangle(halfW - 0.6, -1.5, 1.4, 3.0);
+        cr.fill();
     }
 });
