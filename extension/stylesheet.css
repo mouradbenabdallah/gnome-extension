@@ -6,35 +6,34 @@
 
 #panel.codenotch-vertical-panel,
 .codenotch-vertical-panel {
-    min-height: 44px;
+    min-height: 42px;
 }
 
 .codenotch-notch-box {
-    background-color: rgba(12, 12, 18, 0.78);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 12px;
-    padding: 4px 10px;
+    background-color: rgba(14, 14, 20, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 3px 9px;
     spacing: 2px;
     margin: 2px 4px;
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.08),
-        0 1px 6px rgba(0, 0, 0, 0.35);
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 1px 5px rgba(0, 0, 0, 0.30);
 }
 
 .codenotch-notch-box:hover {
-    border-color: rgba(255, 255, 255, 0.28);
-    background-color: rgba(16, 16, 22, 0.88);
+    border-color: rgba(255, 255, 255, 0.22);
+    background-color: rgba(18, 18, 24, 0.82);
 }
 
 .codenotch-metric-cell {
     spacing: 5px;
-    padding: 2px 6px;
-    border-radius: 8px;
-    transition: background-color 200ms ease;
+    padding: 2px 5px;
+    border-radius: 9px;
 }
 
 .codenotch-metric-cell:hover {
-    background-color: rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 .codenotch-metric-labels {
@@ -49,7 +48,7 @@
 
 .codenotch-value-sublabel {
     font-size: 6.5pt;
-    color: rgba(255, 255, 255, 0.50);
+    color: rgba(255, 255, 255, 0.48);
     min-height: 8px;
 }
 
@@ -59,38 +58,23 @@
 
 .codenotch-menu-boxpointer {
     -arrow-background-color: rgba(18, 18, 24, 0.90);
-    -arrow-border-color: rgba(255, 255, 255, 0.12);
+    -arrow-border-color: rgba(255, 255, 255, 0.10);
     -arrow-border-radius: 12px;
+    -arrow-base: 18px;
+    -arrow-rise: 8px;
 }
 
 .codenotch-card-menu {
     border-radius: 20px;
-    background-color: rgba(18, 18, 26, 0.88) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    padding: 16px 18px !important;
+    background-color: rgba(18, 18, 26, 0.86) !important;
+    border: 1px solid rgba(255, 255, 255, 0.11) !important;
+    padding: 14px 16px !important;
     min-width: 420px;
-    max-width: 560px;
+    max-width: 540px;
     box-shadow:
-        0 20px 60px rgba(0, 0, 0, 0.60),
-        0 2px 12px rgba(0, 0, 0, 0.40),
+        0 12px 28px rgba(0, 0, 0, 0.48),
+        0 2px 8px rgba(0, 0, 0, 0.30),
         inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
-}
-
-/* Glass highlight layer */
-.codenotch-card-menu::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: linear-gradient(
-        90deg,
-        transparent 10%,
-        rgba(255, 255, 255, 0.12) 50%,
-        transparent 90%
-    );
-    border-radius: 20px 20px 0 0;
 }
 
 /* ============================
@@ -98,14 +82,15 @@
    ============================ */
 
 .codenotch-glass-header {
-    spacing: 4px;
+    spacing: 3px;
+    margin-bottom: 2px;
 }
 
 .codenotch-card-header {
     font-size: 11pt;
     font-weight: 700;
     color: #ffffff;
-    margin-bottom: 2px;
+    letter-spacing: 0.2px;
 }
 
 .codenotch-card-subtitle {
@@ -118,12 +103,12 @@
    ============================ */
 
 .codenotch-glass-grid {
-    spacing: 12px;
-    margin: 6px 0;
+    spacing: 10px;
+    margin: 4px 0 8px 0;
 }
 
 .codenotch-glass-column {
-    spacing: 8px;
+    spacing: 6px;
     flex: 1;
 }
 
@@ -132,19 +117,17 @@
    ============================ */
 
 .codenotch-glass-card {
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 12px;
-    padding: 10px 12px;
-    spacing: 4px;
-    transition:
-        background-color 200ms ease,
-        border-color 200ms ease;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 11px;
+    padding: 8px 10px;
+    spacing: 3px;
+    transition: background-color 150ms ease;
 }
 
 .codenotch-glass-card:hover {
-    background-color: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.09);
 }
 
 .codenotch-card-header-row {
@@ -153,21 +136,21 @@
 }
 
 .codenotch-card-title {
-    font-size: 8pt;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.55);
+    font-size: 7.5pt;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.52);
     x_expand: true;
 }
 
 .codenotch-card-value {
-    font-size: 10pt;
-    font-weight: 700;
+    font-size: 10.5pt;
+    font-weight: 600;
     color: #ffffff;
 }
 
 .codenotch-card-section {
     spacing: 5px;
-    margin: 6px 0;
+    margin: 4px 0;
 }
 
 .codenotch-card-row {
@@ -175,8 +158,9 @@
 }
 
 .codenotch-card-label {
-    font-size: 8pt;
-    color: rgba(255, 255, 255, 0.55);
+    font-size: 7.5pt;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.58);
 }
 
 .codenotch-card-val {
@@ -190,28 +174,28 @@
    ============================ */
 
 .codenotch-glass-progress-track {
-    height: 4px;
-    border-radius: 3px;
-    background-color: rgba(255, 255, 255, 0.10);
+    height: 3px;
+    border-radius: 2px;
+    background-color: rgba(255, 255, 255, 0.09);
     margin: 4px 0 2px 0;
 }
 
 .codenotch-glass-progress-fill {
-    height: 4px;
-    border-radius: 3px;
-    transition: width 300ms ease;
+    height: 3px;
+    border-radius: 2px;
+    transition: width 160ms ease-out;
 }
 
 .codenotch-fill-ample {
-    background-color: #00FF88;
+    background-color: #30D158;
 }
 
 .codenotch-fill-watch {
-    background-color: #F2FF00;
+    background-color: #FFD60A;
 }
 
 .codenotch-fill-critical {
-    background-color: #FF3F00;
+    background-color: #FF9F0A;
 }
 
 .codenotch-fill-exhausted {
@@ -223,32 +207,30 @@
    ============================ */
 
 .codenotch-card-graph-wrap {
-    margin: 4px 0 2px 0;
-    padding: 6px 8px;
+    margin: 2px 0 1px 0;
     border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: rgba(255, 255, 255, 0.015);
 }
 
 .codenotch-card-graph-pair {
-    spacing: 6px;
+    spacing: 8px;
 }
 
 .codenotch-sparkline-wrap {
     margin: 1px 0 5px 0;
-    padding: 6px 8px;
     border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.015);
 }
 
 .codenotch-sparkline-pair-wrap {
     margin: 1px 0 5px 0;
-    padding: 6px 8px;
     border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    spacing: 6px;
+    background-color: rgba(255, 255, 255, 0.015);
+    spacing: 8px;
+}
+
+.sparkline-canvas {
+    border-radius: 6px;
 }
 
 /* ============================
@@ -260,22 +242,20 @@
 }
 
 .codenotch-fansublist .codenotch-card-row {
-    margin: 2px 0;
-    padding: 3px 8px;
+    margin: 1px 0;
+    padding: 2px 6px;
     border-radius: 6px;
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background-color: rgba(255, 255, 255, 0.02);
     spacing: 6px;
 }
 
 .codenotch-fansublist .codenotch-card-val {
     font-size: 8.5pt;
-    font-weight: 700;
+    font-weight: 600;
 }
 
 .codenotch-fan-detail-row {
     background-color: transparent;
-    border: none;
     padding: 0;
 }
 
@@ -284,7 +264,7 @@
    ============================ */
 
 .codenotch-cores-section {
-    margin: 4px 0;
+    margin: 2px 0;
 }
 
 .codenotch-core-row {
@@ -295,21 +275,22 @@
 .codenotch-core-track {
     width: 32px;
     height: 36px;
-    padding: 2px;
-    border-radius: 5px;
+    padding: 3px 2px 1px 2px;
+    border-radius: 6px;
     background-color: rgba(255, 255, 255, 0.05);
 }
 
 .codenotch-core-fill {
     width: 28px;
-    border-radius: 2px;
-    transition: height 200ms ease;
+    border-radius: 2.5px;
+    transition: height 140ms ease-out;
 }
 
 .codenotch-core-num {
     font-size: 6pt;
-    color: rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.34);
     text-align: center;
+    min-width: 28px;
 }
 
 /* ============================
@@ -318,15 +299,17 @@
 
 .codenotch-proc-list {
     spacing: 2px;
+    margin-top: 2px;
 }
 
 .codenotch-proc-row {
-    padding: 3px 0;
+    padding: 2px 0;
+    border-radius: 5px;
 }
 
 .codenotch-proc-pct {
     font-size: 8pt;
-    color: rgba(255, 255, 255, 0.80);
+    color: rgba(255, 255, 255, 0.78);
 }
 
 /* ============================
@@ -336,8 +319,7 @@
 .codenotch-dot {
     width: 8px;
     height: 8px;
-    border-radius: 5px;
-    box-shadow: 0 0 6px rgba(255, 255, 255, 0.30);
+    border-radius: 4px;
 }
 
 /* ============================
@@ -346,6 +328,38 @@
 
 .codenotch-separator {
     height: 1px;
-    background-color: rgba(255, 255, 255, 0.08);
-    margin: 6px 0;
+    background-color: rgba(255, 255, 255, 0.06);
+    margin: 5px 0;
+}
+
+/* ============================
+   POPOVER CONTROLS
+   ============================ */
+
+.codenotch-card-menu .popup-menu-item {
+    padding: 5px 6px;
+    border-radius: 6px;
+    font-size: 8.5pt;
+}
+
+.codenotch-card-menu .popup-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.codenotch-card-menu .popup-switch-menu-item {
+    padding: 5px 6px;
+    border-radius: 6px;
+    font-size: 8.5pt;
+}
+
+.codenotch-card-menu .popup-switch-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.codenotch-card-menu .popup-separator-menu-item {
+    margin: 2px 0;
+}
+
+.codenotch-card-menu .popup-switch-menu-item-switch {
+    border-radius: 10px;
 }

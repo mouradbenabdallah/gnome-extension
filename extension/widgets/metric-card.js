@@ -114,10 +114,14 @@ export class MetricCard {
   }
 
   setProgress(fraction) {
-    const totalW = 180;
-    const fillW = Math.max(0, Math.min(totalW, Math.round(fraction * totalW)));
-    this._progressFill.width = fillW;
-    this._applyBandColor(this._progressFill, fraction);
+    const frac = Math.max(0, Math.min(1, fraction));
+    const totalW =
+      this._progressTrack.allocation.get_width() > 0
+        ? this._progressTrack.allocation.get_width()
+        : 180;
+    const fillW = Math.max(0, Math.round(frac * totalW));
+    if (this._progressFill.width !== fillW) this._progressFill.width = fillW;
+    this._applyBandColor(this._progressFill, frac);
   }
 
   addGraph(sparkline) {

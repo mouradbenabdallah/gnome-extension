@@ -8,10 +8,10 @@ import cairo from 'cairo';
  */
 const PALETTE = {
     ringTrack: { r: 1.0, g: 1.0, b: 1.0, a: 0.18 },
-    ample:     { r: 0.0, g: 1.0, b: 0.533, a: 1.0 },   // #00FF88 (under 50%)
-    watch:     { r: 0.949, g: 1.0, b: 0.0, a: 1.0 },   // #F2FF00 (50% - 75%)
-    critical:  { r: 1.0, g: 0.247, b: 0.0, a: 1.0 },   // #FF3F00 (75% - 90%)
-    exhausted: { r: 1.0, g: 0.271, b: 0.227, a: 1.0 }, // #FF453A (> 90%)
+    ample:     { r: 0.188, g: 0.82, b: 0.345, a: 1.0 },  // #30D158 (under 50%)
+    watch:     { r: 1.0, g: 0.839, b: 0.039, a: 1.0 },   // #FFD60A (50% - 75%)
+    critical:  { r: 1.0, g: 0.623, b: 0.039, a: 1.0 },   // #FF9F0A (75% - 90%)
+    exhausted: { r: 1.0, g: 0.271, b: 0.227, a: 1.0 },   // #FF453A (> 90%)
     glyphIdle: { r: 1.0, g: 1.0, b: 1.0, a: 0.82 },
 };
 
@@ -69,7 +69,7 @@ class RingGauge extends St.DrawingArea {
 
         // Animate the ring arc smoothly toward the target value.
         if (!this._animSource) {
-            if (Math.abs(this._value - this._targetValue) < 0.2) {
+            if (Math.abs(this._value - this._targetValue) < 0.1) {
                 this._value = this._targetValue;
                 this.queue_repaint();
                 return;
@@ -86,14 +86,14 @@ class RingGauge extends St.DrawingArea {
         if (this._fanSource)
             return;
 
-        this._fanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 66, () => {
+        this._fanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
             const pct = this._value / 100.0;
             if (pct <= 0.001) {
                 this._stopFanSpin();
                 return GLib.SOURCE_REMOVE;
             }
-            // Gentle idle rotation that speeds up with fan %, ~1-2 rev/s
-            const step = 0.1 + pct * 0.76;
+            // Gentle idle rotation that speeds up with fan %, ~1-1.5 rev/s
+            const step = 0.1 + pct * 0.6;
             this._fanAngle = (this._fanAngle + step) % (Math.PI * 2);
             this.queue_repaint();
             return GLib.SOURCE_CONTINUE;
@@ -109,13 +109,13 @@ class RingGauge extends St.DrawingArea {
 
     _animateStep() {
         const diff = this._targetValue - this._value;
-        if (Math.abs(diff) <= 0.15) {
+        if (Math.abs(diff) <= 0.1) {
             this._value = this._targetValue;
             this._animSource = 0;
             this.queue_repaint();
             return GLib.SOURCE_REMOVE;
         }
-        this._value += diff * 0.25;
+        this._value += diff * 0.3;
         this.queue_repaint();
         return GLib.SOURCE_CONTINUE;
     }

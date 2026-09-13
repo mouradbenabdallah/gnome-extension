@@ -1,702 +1,742 @@
-You are working on my GNOME Shell extension repository:
+I want you to STOP adding new features.
 
-https://github.com/mouradbenabdallah/gnome-extension
+Use the CURRENT implementation and improve ONLY:
+1. Visual design
+2. Animations
+3. Performance / lag
+4. Spacing, sizing and alignment
+5. Overall polish
+
+DO NOT add new widgets.
+DO NOT add new metrics.
+DO NOT add new settings.
+DO NOT redesign the functionality.
+DO NOT add unnecessary features.
+
+The screenshot I provided shows the current result. Use it as the visual reference for what needs improvement.
+
+==================================================
+GOAL
+==================================================
+
+I want this existing System Monitor popup to feel like a PREMIUM Apple/macOS-inspired interface.
+
+Think:
+
+- macOS Liquid Glass
+- Apple Control Center
+- Apple system widgets
+- smooth, subtle, physical animations
+- elegant spacing
+- clean typography
+- translucent glass
+- minimal borders
+- refined shadows
+- polished micro-interactions
 
 IMPORTANT:
-First inspect the entire repository and understand the existing architecture before modifying anything.
 
-This is a GNOME Shell system monitor extension built with:
-- GNOME Shell 45+
-- GJS / JavaScript ESM
-- Rust telemetry daemon
-- GSettings
-- GTK4 / Libadwaita preferences
-- Custom CSS
-- Cairo gauges / sparklines
+Do NOT copy Apple's UI exactly.
 
-The current project already works. DO NOT rewrite the telemetry daemon or replace the architecture unnecessarily.
+Use Apple's level of polish and animation quality as inspiration.
 
-The goal is to redesign the user interface so it feels like a polished modern macOS-inspired system monitor while remaining native and appropriate for GNOME.
+Keep it native to GNOME.
 
 ==================================================
-1. MAIN OBJECTIVE
+1. FIX THE BIGGEST PROBLEM FIRST: LAG
 ==================================================
 
-Redesign the current system-monitor popover shown when clicking the top-panel capsule.
+The current popup is VERY laggy.
 
-CURRENT:
-- Tall vertical card
-- Metrics stacked vertically
-- Large CPU core grid
-- Traditional progress bars
-- Basic dark styling
+Performance is now the highest priority.
 
-TARGET:
-A wide horizontal macOS-inspired floating monitoring panel.
+Before changing the visual design further, inspect why the extension is lagging.
 
-The panel should feel like:
-- macOS Activity Monitor
-- macOS Control Center
-- modern Liquid Glass / translucent glass UI
-- premium desktop widget
-- smooth, subtle animations
+Profile / inspect:
 
-DO NOT literally copy Apple's UI or assets.
-Use the design language as inspiration while keeping the implementation original and GNOME-native.
+- extension.js
+- popup creation
+- metric widgets
+- sparklines
+- CPU core rendering
+- process list updates
+- telemetry polling
+- GJS main-thread work
+- Clutter actors
+- Cairo drawing
+- CSS effects
+- animations
+- signal connections
+- timers
+- GLib timeouts
+- GSettings listeners
 
-==================================================
-2. NEW HORIZONTAL LAYOUT
-==================================================
-
-Transform the current vertical popover into a wide horizontal card.
-
-Recommended structure:
-
-┌─────────────────────────────────────────────────────────────────────┐
-│                                                                     │
-│  CPU              MEMORY            GPU             NETWORK         │
-│  6.4%  64°C       3.9 / 23.2 GB     0%  55°C       ↓ 0 KB/s       │
-│  ─────────        ─────────────     ─────────       ↑ 0 KB/s       │
-│                                                                     │
-│  FAN             DISK I/O          BATTERY          TEMPERATURE     │
-│  2580 RPM        R 0 KB/s          47%              64°C            │
-│                  W 180 KB/s                                         │
-│                                                                     │
-│              [ small live graphs / indicators ]                    │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-
-The exact layout can be improved after inspecting the existing widgets.
-
-Use responsive layout principles.
-
-The card should not become excessively wide on smaller screens.
-
-Use a maximum width and adapt the number of visible columns depending on available space.
+Find the actual causes instead of guessing.
 
 ==================================================
-3. LIQUID GLASS DESIGN
+2. DO NOT REBUILD THE UI EVERY UPDATE
 ==================================================
 
-Create a convincing "Liquid Glass" effect.
+This is extremely important.
 
-The design should have:
+Telemetry updates must NOT cause:
 
-- highly rounded corners
-- translucent dark background
-- subtle background transparency
-- soft blur / frosted-glass effect where GNOME Shell permits it
-- thin semi-transparent border
+- destroying the entire popup
+- recreating all widgets
+- recreating every St.Widget
+- rebuilding every graph
+- recreating process rows
+- rebuilding CPU core widgets
+- reapplying stylesheets
+- recreating animations
+
+Create the UI ONCE.
+
+Then update only the values that changed.
+
+For example:
+
+BAD:
+
+telemetry update
+→ destroy CPU widget
+→ create CPU widget
+→ destroy RAM widget
+→ create RAM widget
+→ destroy GPU widget
+→ create GPU widget
+→ redraw everything
+
+GOOD:
+
+telemetry update
+→ CPU label.text = new value
+→ CPU progress width = new value
+→ RAM label.text = new value
+→ update existing sparkline
+→ update GPU value
+→ update only changed process rows
+
+Use persistent actors.
+
+==================================================
+3. THROTTLE VISUAL UPDATES
+==================================================
+
+The telemetry backend can collect data frequently.
+
+That does NOT mean the UI needs to redraw everything at the same frequency.
+
+Separate:
+
+TELEMETRY RATE
+
+from
+
+UI UPDATE RATE
+
+Use a reasonable UI refresh rate.
+
+For example:
+
+- telemetry can remain fast
+- visual updates around 10–20 FPS are enough
+- text values can update less frequently
+- graphs can update at a controlled interval
+
+Do not animate every single telemetry sample.
+
+Do not run unnecessary animation frames when the popup is closed.
+
+==================================================
+4. STOP ANIMATING HIDDEN UI
+==================================================
+
+When the popup is closed:
+
+- stop graph animations
+- stop visual interpolation
+- stop expensive redraws
+- stop unnecessary process updates
+- stop Clutter transitions
+
+Telemetry itself can continue if required by the existing functionality.
+
+But the UI should become almost completely idle while hidden.
+
+When opened:
+
+- resume visual updates
+
+==================================================
+5. SPARKLINE PERFORMANCE
+==================================================
+
+Inspect the sparkline implementation carefully.
+
+Do NOT recreate Cairo surfaces unnecessarily.
+
+Do NOT redraw the entire graph more often than necessary.
+
+Reuse existing drawing resources where possible.
+
+If the graph only receives one new point:
+
+update the existing data buffer and redraw only when necessary.
+
+Do not animate every graph continuously.
+
+The graphs should look smooth, but performance comes first.
+
+==================================================
+6. CPU CORES PERFORMANCE
+==================================================
+
+The CPU core section currently contains many individual widgets.
+
+Do not create unnecessary actors for every update.
+
+Keep the existing core widgets and update their values.
+
+Avoid expensive transitions on every core.
+
+The core bars should update smoothly but cheaply.
+
+If animation causes noticeable lag:
+
+reduce the animation duration or use simple interpolation.
+
+==================================================
+7. TOP PROCESSES PERFORMANCE
+==================================================
+
+Do not destroy and recreate the process list every telemetry update.
+
+Reuse existing rows.
+
+Only update:
+
+- process name
+- percentage
+- ordering when necessary
+
+Do not continuously reorder the list if the change is insignificant.
+
+Throttle process updates more aggressively than CPU/RAM values.
+
+==================================================
+8. APPLE-LIKE VISUAL DESIGN
+==================================================
+
+Now improve the visual design.
+
+The current popup looks like a normal GNOME application panel.
+
+I want it to feel much more premium.
+
+Use:
+
+- softer rounded corners
+- cleaner spacing
+- more balanced padding
+- subtle translucent background
+- glass-like layers
+- subtle highlight around edges
+- refined shadows
+- cleaner separators
+- less visual clutter
+- better typography hierarchy
+
+Avoid making everything extremely rounded.
+
+The design should be elegant, not cartoon-like.
+
+==================================================
+9. LIQUID GLASS
+==================================================
+
+Improve the existing glass effect.
+
+Use a dark translucent surface with:
+
+- subtle transparency
+- subtle gradient
 - subtle inner highlight
+- very thin border
 - soft shadow
-- layered surfaces
-- slightly brighter glass around interactive elements
-- elegant contrast
-- minimal visual noise
+- slight depth between sections
 
-Do NOT use excessive blur that destroys readability or causes performance problems.
+The glass should feel like a physical translucent surface.
 
-If true background blur is not technically reliable in GNOME Shell:
+Do NOT use extreme blur.
 
-Create a high-quality visual approximation using:
-- translucent backgrounds
-- gradients
-- subtle highlights
-- borders
-- shadows
-- layered St widgets
-- CSS
+Do NOT use huge shadows.
 
-The final result should still look like premium glass.
+Do NOT make the background completely opaque.
 
-Use the existing stylesheet architecture instead of scattering inline styles throughout JavaScript.
+Do NOT add visual effects that significantly increase GPU/CPU usage.
+
+Performance is more important than a fake blur effect.
 
 ==================================================
-4. ANIMATIONS
+10. CARD DESIGN
 ==================================================
 
-Improve the animations significantly.
+The current metric cards feel too much like separate boxes.
 
-The UI should feel alive but not distracting.
+Make them feel more integrated.
 
-Add:
+Reduce unnecessary borders.
 
-A. POPOVER OPEN
+Use subtle separation instead of:
 
-When opening:
-- slight scale from ~0.96 → 1.0
-- fade in
-- slight upward movement
-- spring/eased interpolation
-- duration around 180–250ms
+"box inside box inside box"
 
-B. POPOVER CLOSE
+For example:
 
-Reverse the animation smoothly.
+CPU
 
-C. METRIC VALUES
+10.7%                         72°C
 
-When CPU/RAM/GPU/network values change:
-- do not visually jump
-- smoothly interpolate values
-- use easing
+━━━━━━━━━━━━━━━━━━━━
 
-D. PROGRESS BARS
+[ subtle graph ]
 
-Bars should smoothly transition instead of instantly changing width.
+The metric itself should be the focus.
 
-E. GRAPH UPDATES
+Use hierarchy:
 
-Graphs should animate naturally when new telemetry arrives.
+Title
+Large value
+Secondary value
+Graph
 
-Avoid rebuilding widgets unnecessarily.
+Not:
 
-F. HOVER EFFECTS
+Title
+box
+bar
+box
+box
+another box
 
-Interactive metric cards should have:
-- subtle glass highlight
-- slight brightness increase
-- smooth transition
+==================================================
+11. TYPOGRAPHY
+==================================================
 
-Do NOT overuse scaling.
+Improve typography.
 
-G. SETTINGS
+Use GNOME's native font/system font.
 
-Settings interactions should also have subtle transitions.
+Hierarchy:
+
+System Monitor
+→ strong
+
+Metric title
+→ small and subtle
+
+Main value
+→ larger and brighter
+
+Secondary information
+→ smaller and lower contrast
+
+Avoid too many bold labels.
+
+Numbers should be visually dominant.
+
+==================================================
+12. SPACING
+==================================================
+
+The current layout has inconsistent spacing.
+
+Refine:
+
+- outer padding
+- card spacing
+- column spacing
+- graph padding
+- title spacing
+- section spacing
+- CPU core spacing
+- bottom controls spacing
+
+Everything should feel intentionally aligned.
+
+Use a consistent spacing scale.
+
+For example:
+
+4
+8
+12
+16
+24
+
+Avoid arbitrary values everywhere.
+
+==================================================
+13. PANEL SIZE
+==================================================
+
+Keep the current horizontal layout.
+
+Do NOT make it unnecessarily larger.
+
+The popup should feel compact and dense like a polished system utility.
+
+The user should immediately understand:
+
+CPU
+RAM
+GPU
+Network
+Disk
+Fan
+History
+Processes
+CPU cores
+
+without excessive empty space.
+
+==================================================
+14. OPEN ANIMATION
+==================================================
+
+Make the popup opening feel like Apple-quality UI.
+
+Animation:
+
+Initial:
+- slightly smaller
+- slightly transparent
+- slightly displaced upward
+
+Then:
+
+opacity → 100%
+scale → 100%
+position → final
+
+Use smooth easing.
+
+Approximate duration:
+
+180–250 ms
+
+Do NOT use linear animation.
+
+Do NOT make it bounce aggressively.
+
+The animation should feel physical and subtle.
+
+==================================================
+15. CLOSE ANIMATION
+==================================================
+
+Use a short reverse animation.
+
+Approximately:
+
+120–180 ms
+
+It should disappear smoothly rather than simply vanishing.
+
+==================================================
+16. VALUE ANIMATION
+==================================================
+
+When:
+
+CPU:
+10.7 → 12.3
+
+RAM:
+3.1 → 3.3
+
+Fan:
+4033 → 4100
+
+do NOT instantly replace the visual value if interpolation is practical.
+
+Use lightweight interpolation.
+
+But:
 
 IMPORTANT:
-Avoid animations running unnecessarily when the popover is hidden.
 
-Avoid animation loops that consume CPU.
+Never create a new animation object every telemetry update.
 
-==================================================
-5. TOP PANEL CAPSULE
-==================================================
+Reuse animation mechanisms or implement a lightweight interpolation system.
 
-Improve the existing top-panel capsule too.
-
-It should feel like a compact macOS-style status capsule.
-
-Example:
-
-   ◉  CPU 6%   RAM 17%   GPU 0%
-
-or:
-
-   [ CPU 6% ] [ RAM 17% ] [ GPU 0% ]
-
-Keep it compact.
-
-Use:
-- glass background
-- rounded capsule
-- subtle border
-- animated values
-- smooth transitions
-
-The existing compact mode should remain functional.
+If interpolation causes lag, prioritize performance and reduce it.
 
 ==================================================
-6. METRIC WIDGET SYSTEM
+17. PROGRESS BARS
 ==================================================
 
-This is VERY IMPORTANT.
+Progress bars should smoothly move.
 
-The user must be able to choose exactly which widgets appear.
+Avoid sudden jumps.
 
-Create a proper widget configuration system.
+Use subtle transitions.
 
-Possible widgets:
+Do not animate indefinitely.
 
-- CPU
-- CPU Temperature
-- CPU Cores
-- RAM
+Do not restart a CSS transition unnecessarily on every update.
+
+==================================================
+18. GRAPH ANIMATION
+==================================================
+
+Graphs should feel alive but subtle.
+
+When a new sample arrives:
+
+smoothly introduce it.
+
+Do not constantly animate the entire graph.
+
+Do not create a continuous 60 FPS graph animation.
+
+A graph update should be cheap.
+
+==================================================
+19. HOVER EFFECTS
+==================================================
+
+If widgets are interactive:
+
+Use subtle hover:
+
+- slightly brighter glass
+- subtle border highlight
+
+Do NOT use:
+
+- large scale
+- bounce
+- excessive glow
+
+Keep it Apple-like.
+
+==================================================
+20. SETTINGS / CONTROLS AT BOTTOM
+==================================================
+
+DO NOT ADD NEW SETTINGS.
+
+Keep the existing controls:
+
+Pause telemetry
+Compact mode
+Reinitialize sensors
+Settings
+
+But improve their visual design.
+
+They should look like native polished controls.
+
+The current switches and rows feel disconnected from the rest of the panel.
+
+Make them visually consistent with the glass design.
+
+==================================================
+21. COLORS
+==================================================
+
+Do not introduce a rainbow of colors.
+
+Keep the current semantic colors:
+
+- CPU / normal activity
+- memory
 - GPU
-- GPU Temperature
-- Fan
-- Network
-- Disk I/O
-- Temperature
-- History
-- Top Processes
+- network
+- disk
+- fan
+- warnings
 
-Each widget must be independently enabled/disabled.
+But make them more subtle.
 
-Example:
-
-CPU              ON
-CPU Temperature  ON
-CPU Cores        OFF
-RAM              ON
-GPU              ON
-Fan              ON
-Network          OFF
-Disk             ON
-Top Processes    OFF
-
-The UI should immediately reflect these changes.
-
-Do NOT hard-code the layout around all widgets.
-
-Build a reusable widget registry/component system.
-
-For example conceptually:
-
-MetricWidgetRegistry
-  CPU
-  Memory
-  GPU
-  Fan
-  Network
-  Disk
-  CPUCores
-  History
-  Processes
-
-Each widget should have:
-- id
-- title
-- icon
-- enabled state
-- render function
-- optional size/layout information
-
-This will make future widgets easy to add.
+Apple-inspired design generally uses color as information, not decoration.
 
 ==================================================
-7. DRAG AND DROP / ORDERING
+22. CSS PERFORMANCE
 ==================================================
 
-If practical with GNOME Shell widgets, allow the user to reorder widgets.
+Inspect the stylesheet.
 
-Example:
+Avoid expensive CSS effects applied to dozens of actors.
 
-CPU
-RAM
-GPU
-Network
+Especially investigate:
 
-could become:
+- excessive shadows
+- large blur effects
+- multiple gradients
+- repeated effects
+- unnecessary transitions
+- effects applied to every CPU core
 
-GPU
-CPU
-RAM
-Network
-
-Persist the order using GSettings.
-
-If implementing drag-and-drop is too complex for the current GNOME Shell architecture, create a simple ordering system in Preferences instead.
-
-Do NOT introduce fragile behavior just for drag-and-drop.
+Apply expensive visual effects only to the main glass panel when possible.
 
 ==================================================
-8. EXTENSION SETTINGS / PREFERENCES
+23. GNOME SHELL PERFORMANCE
 ==================================================
 
-Create a professional preferences window.
+Remember:
 
-Use modern GTK4 + Libadwaita patterns appropriate for the GNOME version supported by this project.
+This runs INSIDE GNOME Shell.
 
-GNOME extension preferences should be accessible through the normal extension settings flow.
+A performance problem here affects the desktop.
 
-Organize settings into sections:
+Therefore:
 
-GENERAL
-- Enable extension
-- Start automatically
-- Polling interval
-- Pause while locked
+- minimize main-thread work
+- minimize actor creation
+- minimize redraws
+- minimize Cairo operations
+- minimize animations
+- avoid unnecessary allocations
+- clean up signals
+- clean up GLib sources
+- clean up Clutter transitions
+- avoid memory leaks
 
-APPEARANCE
-- Liquid Glass style
-- Glass opacity
-- Blur intensity if supported
-- Corner radius
-- Compact mode
-- Panel capsule style
-- Dark / system appearance if appropriate
-
-ANIMATIONS
-- Enable animations
-- Animation intensity
-- Popover animation
-- Value transitions
-- Graph animations
-
-WIDGETS
-- Enable/disable individual widgets
-- Widget ordering
-- Show/hide CPU cores
-- Show/hide graphs
-- Show/hide processes
-
-PERFORMANCE
-- Telemetry interval
-- Graph history length
-- Reduce animations
-- Low-power mode
-
-ALERTS
-- CPU threshold
-- Temperature threshold
-- GPU threshold
-- Fan threshold
-- RAM threshold
-
-ADVANCED
-- Reinitialize sensors
-- Reset settings
-- Debug information
+Do not sacrifice GNOME Shell responsiveness for visual effects.
 
 ==================================================
-9. WIDGET CUSTOMIZATION UI
+24. NO NEW FEATURES
 ==================================================
 
-The most important settings page should be "Widgets".
+Again:
 
-Create a visual list similar to:
+DO NOT ADD:
 
-Widgets
+- new metrics
+- new widgets
+- new pages
+- new graphs
+- new controls
+- new settings
+- new telemetry
+- new backend features
 
-┌──────────────────────────────────────┐
-│ ⋮⋮  CPU                         [ON] │
-│ ⋮⋮  Memory                      [ON] │
-│ ⋮⋮  GPU                         [ON] │
-│ ⋮⋮  Fan                         [ON] │
-│ ⋮⋮  Network                    [OFF] │
-│ ⋮⋮  Disk I/O                    [ON] │
-│ ⋮⋮  CPU Cores                  [OFF] │
-│ ⋮⋮  Top Processes              [OFF] │
-└──────────────────────────────────────┘
-
-Use proper GNOME/Libadwaita switches and rows.
-
-If ordering is supported, show a drag handle.
-
-The user should not need to modify configuration files manually.
+Only polish what already exists.
 
 ==================================================
-10. LIVE SETTINGS
-==================================================
-
-Changing widget visibility in Preferences should update the extension without requiring a reboot.
-
-Avoid requiring:
-- logout
-- GNOME Shell restart
-- reinstall
-- manual dconf commands
-
-Use GSettings signals/listeners to react to changes.
-
-The extension should dynamically:
-- add widgets
-- remove widgets
-- reorder widgets
-- update layout
-
-==================================================
-11. RESPONSIVE LAYOUT
-==================================================
-
-The horizontal panel must work on:
-
-- 1080p
-- 1440p
-- 4K
-- laptop screens
-
-Do not assume a fixed screen resolution.
-
-Use:
-- natural widths
-- maximum width
-- minimum widths
-- adaptive columns
-- wrapping where necessary
-
-Example:
-
-Large screen:
-
-CPU | RAM | GPU | Network | Disk | Fan
-
-Smaller screen:
-
-CPU | RAM | GPU
-Network | Disk | Fan
-
-Do not allow widgets to overlap.
-
-==================================================
-12. CPU CORES
-==================================================
-
-The current CPU core grid takes a lot of vertical space.
-
-Redesign it.
-
-Possible design:
-
-CPU
-────────────────────────
-6.4%       64°C
-
-Core usage:
-
-0 ██████  1 ████  2 █████
-3 ██      4 █████ 5 ███
-6 ████    7 ██     ...
-
-Or a compact mini-grid.
-
-It should be optional through Settings.
-
-==================================================
-13. GRAPHS
-==================================================
-
-Improve the existing graphs.
-
-Use the existing sparkline implementation where possible.
-
-Graphs should:
-- have smooth lines
-- use subtle transparency
-- avoid excessive colors
-- have minimal axes
-- animate new samples
-- fit inside metric cards
-- resize with their parent widget
-
-CPU history should be optional.
-
-Network and Disk graphs should remain lightweight.
-
-==================================================
-14. TOP PROCESSES
-==================================================
-
-Keep Top Processes as an optional widget.
-
-When enabled:
-
-Top Processes
-
-Firefox              18.2%
-gnome-shell            7.4%
-code                    5.8%
-
-Use a compact design.
-
-Do not constantly destroy and recreate rows.
-
-Reuse existing rows where possible.
-
-==================================================
-15. PERFORMANCE
-==================================================
-
-This is a GNOME Shell extension.
-
-Performance is extremely important.
-
-DO NOT:
-- create unnecessary polling loops
-- constantly rebuild the entire popover
-- recreate every widget on every telemetry update
-- animate hidden widgets
-- use expensive effects continuously
-- perform heavy Rust calls unnecessarily
-- introduce memory leaks
-
-The telemetry daemon should remain responsible for hardware collection.
-
-The extension should mainly handle presentation.
-
-Reuse the existing architecture.
-
-==================================================
-16. GSETTINGS
-==================================================
-
-Extend the existing GSettings schema.
-
-Do not create duplicate configuration mechanisms.
-
-Possible keys:
-
-panel-layout
-enabled-widgets
-widget-order
-glass-enabled
-glass-opacity
-corner-radius
-animations-enabled
-animation-speed
-show-graphs
-show-cpu-cores
-show-processes
-poll-interval
-history-length
-
-Use appropriate GSettings types.
-
-Make sure schema compilation works.
-
-Provide sensible defaults.
-
-Do not break existing settings.
-
-If changing an existing key, preserve backwards compatibility when possible.
-
-==================================================
-17. CODE QUALITY
-==================================================
-
-Keep the code modular.
-
-Avoid putting everything inside extension.js.
-
-If necessary create files such as:
-
-extension/
-├── extension.js
-├── widgets/
-│   ├── widget-registry.js
-│   ├── metric-card.js
-│   ├── cpu-widget.js
-│   ├── memory-widget.js
-│   ├── gpu-widget.js
-│   ├── fan-widget.js
-│   ├── network-widget.js
-│   ├── disk-widget.js
-│   ├── history-widget.js
-│   └── processes-widget.js
-├── ui/
-│   ├── glass-panel.js
-│   ├── metric-layout.js
-│   └── animations.js
-├── ring_gauge.js
-├── sparkline.js
-├── prefs.js
-├── schemas/
-└── stylesheet.css
-
-Only introduce files when they genuinely improve maintainability.
-
-==================================================
-18. PRESERVE EXISTING FUNCTIONALITY
+25. IMPORTANT: KEEP CURRENT FUNCTIONALITY
 ==================================================
 
 Do not break:
 
-- CPU telemetry
-- RAM telemetry
-- GPU telemetry
-- fan telemetry
-- network telemetry
-- disk telemetry
-- temperature detection
-- top processes
+- CPU
+- RAM
+- GPU
+- fan
+- network
+- disk
+- temperature
 - history
-- alerts
+- processes
+- CPU cores
 - pause telemetry
 - compact mode
 - sensor reinitialization
-- systemd daemon
-- Unix socket communication
-- suspend recovery
-- lock-screen behavior
-
-The redesign must sit on top of the existing functionality.
+- Settings
+- Rust telemetry daemon
+- GSettings
+- existing installation flow
 
 ==================================================
-19. DEBUGGING AND VALIDATION
+26. WORKFLOW
 ==================================================
 
-Before finishing:
+First:
 
-1. Inspect existing files.
-2. Identify the current UI architecture.
-3. Identify current GSettings schema.
-4. Identify current widget implementations.
-5. Implement the redesign incrementally.
-6. Run the existing Rust tests.
-7. Build the extension.
-8. Compile GSettings schemas.
-9. Check JavaScript syntax/errors.
-10. Check for GNOME Shell runtime errors.
-11. Verify settings are persisted.
-12. Verify enabling/disabling widgets works.
-13. Verify the popover still opens/closes correctly.
-14. Verify the daemon still works.
-15. Verify the extension survives GNOME Shell reload where supported.
+1. Inspect the current implementation.
+2. Identify the sources of the lag.
+3. Explain internally what is causing the performance problems.
+4. Fix performance first.
+5. Then refine the visual design.
+6. Then refine animations.
+7. Run tests/build.
+8. Review for memory leaks.
+9. Review for unnecessary redraws.
+10. Review the final UI.
 
-Use the repository's existing Makefile/install/test commands.
+Do not blindly rewrite working code.
+
+Prefer small, targeted changes.
 
 ==================================================
-20. IMPORTANT IMPLEMENTATION RULE
+27. ACCEPTANCE CRITERIA
 ==================================================
 
-Do not blindly implement this from the description.
+The result is successful ONLY if:
 
-First inspect the repository and understand how the existing code works.
+VISUAL:
 
-Then make a concrete implementation plan.
+- looks significantly more premium
+- feels Apple/macOS-inspired
+- has a convincing Liquid Glass appearance
+- spacing is balanced
+- typography is cleaner
+- cards feel integrated
+- popup feels polished
 
-Then implement the changes.
+ANIMATION:
 
-Do not stop after creating a plan.
+- opening is smooth
+- closing is smooth
+- values transition smoothly
+- bars transition smoothly
+- graphs update smoothly
+- no excessive bouncing
+- no animation jitter
 
-Actually modify the project.
+PERFORMANCE:
 
-After implementation, review your own changes and fix:
-- syntax errors
-- GSettings schema errors
-- layout issues
-- memory leaks
-- animation performance problems
-- GNOME Shell API incompatibilities
+MOST IMPORTANT:
+
+Opening the popup must feel instant.
+
+Scrolling / interacting must feel instant.
+
+GNOME Shell must remain responsive.
+
+CPU usage of the extension should remain low.
+
+No visible stuttering.
+
+No continuous unnecessary redraws.
+
+No 60 FPS animation loops when nothing is changing.
+
+No recreation of the entire UI on telemetry updates.
 
 ==================================================
-FINAL UX GOAL
+FINAL INSTRUCTION
 ==================================================
 
-When the user clicks the top-panel monitor capsule, the experience should look approximately like:
+DO NOT ADD ANYTHING.
 
-       ┌─────────────────────────────────────────────────────────────┐
-       │                                                             │
-       │   CPU          MEMORY         GPU          NETWORK          │
-       │   6.4%        3.9 GB         0%           ↓ 0 KB/s         │
-       │   64°C        16.8%          55°C         ↑ 0 KB/s         │
-       │   ╭─────╮     ╭─────╮        ╭─────╮      ╭─────╮          │
-       │   │graph│     │graph│        │graph│      │graph│          │
-       │   ╰─────╯     ╰─────╯        ╰─────╯      ╰─────╯          │
-       │                                                             │
-       │   FAN          DISK I/O      TEMPERATURE    BATTERY         │
-       │   2580 RPM     R 0 KB/s      64°C           47%             │
-       │                W 180 KB/s                                    │
-       │                                                             │
-       └─────────────────────────────────────────────────────────────┘
+DO NOT MAKE THE PROJECT MORE COMPLEX.
 
-With:
+Take the UI that exists NOW and make it:
 
-- premium dark Liquid Glass appearance
-- translucent layered surfaces
-- smooth spring-like animation
-- smooth changing values
-- compact metric cards
-- optional widgets
-- configurable widget order
-- professional Libadwaita settings
-- no unnecessary telemetry overhead
-- no breaking changes to the Rust backend
+"same functionality + same information + much more beautiful + dramatically smoother + dramatically less laggy."
 
-The result should feel like a polished GNOME extension that takes inspiration from
-modern macOS system UI, rather than a basic GNOME popup.
+The priority order is:
 
-Do not merely make the existing vertical card wider.
+1. PERFORMANCE
+2. SMOOTHNESS
+3. VISUAL POLISH
+4. LIQUID GLASS
+5. APPLE-QUALITY MICRO-INTERACTIONS
 
-Actually redesign the information hierarchy and component layout.
+If a visual effect hurts performance, REMOVE THE EFFECT.
+
+A fast and beautiful UI is better than a heavy fake Liquid Glass effect.

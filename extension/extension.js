@@ -42,6 +42,9 @@ export default class SparklineMonitorExtension extends Extension {
     this._pauseWanted = false;
 
     this._coreBars = [];
+    this._menuOpen = false;
+    this._latestData = null;
+    this._telemetryCounter = 0;
 
     this._loadSettings();
     this._setupWidgetRegistry();
@@ -469,10 +472,12 @@ export default class SparklineMonitorExtension extends Extension {
     if (this._coreBars.length !== cores.length) {
       this._buildCoreGrid(cores.length);
     }
+    const CORE_MAX_H = 36;
     for (let i = 0; i < cores.length; i++) {
       const clampPct = Math.max(0, Math.min(100, cores[i]));
       const fill = this._coreBars[i].fill;
-      fill.height = Math.max(2, Math.round((clampPct / 100.0) * 36));
+      const newH = Math.max(2, Math.round((clampPct / 100.0) * CORE_MAX_H));
+      if (fill.height !== newH) fill.height = newH;
       this._applyBandColor(fill, clampPct / 100.0);
     }
   }
@@ -495,40 +500,44 @@ export default class SparklineMonitorExtension extends Extension {
   _onMenuStateChanged(menu, open) {
     const content = menu.box;
     const animate = this._getBool("animate-popover", true);
+    const targetOpacity = Math.round(this._getDouble("glass-opacity", 0.88) * 255);
 
     if (open) {
+      this._menuOpen = true;
+      this._flushLatestData();
+      this._resumeUiUpdates();
+      content.remove_all_transitions();
+      content.set_pivot_point(0.5, 0);
       if (animate) {
-        content.remove_all_transitions();
-        content.set_pivot_point(0.5, 0);
-        content.scale_x = 0.96;
-        content.scale_y = 0.96;
+        content.scale_x = 0.97;
+        content.scale_y = 0.97;
         content.opacity = 0;
-        content.translation_y = -8;
-        content.ease_property("opacity", 255, {
+        content.translation_y = -6;
+        content.ease_property("opacity", targetOpacity, {
           duration: 180,
           mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
         });
         content.ease_property("scale-x", 1, {
-          duration: 260,
-          mode: Clutter.AnimationMode.EASE_OUT_BACK,
-        });
-        content.ease_property("scale-y", 1, {
-          duration: 260,
-          mode: Clutter.AnimationMode.EASE_OUT_BACK,
-        });
-        content.ease_property("translation-y", 0, {
           duration: 220,
           mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
         });
+        content.ease_property("scale-y", 1, {
+          duration: 220,
+          mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+        });
+        content.ease_property("translation-y", 0, {
+          duration: 200,
+          mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+        });
       } else {
-        content.remove_all_transitions();
-        content.set_pivot_point(0.5, 0);
         content.scale_x = 1;
         content.scale_y = 1;
-        content.opacity = 255;
+        content.opacity = targetOpacity;
         content.translation_y = 0;
       }
     } else {
+      this._menuOpen = false;
+      this._freezeUi();
       if (animate) {
         content.remove_all_transitions();
         content.ease_property("opacity", 0, {
@@ -543,12 +552,39 @@ export default class SparklineMonitorExtension extends Extension {
           duration: 140,
           mode: Clutter.AnimationMode.EASE_IN_CUBIC,
         });
-        content.ease_property("translation-y", 5, {
+        content.ease_property("translation-y", 4, {
           duration: 140,
           mode: Clutter.AnimationMode.EASE_IN_CUBIC,
         });
       }
     }
+  }
+
+  _resumeUiUpdates() {
+    if (!this._registry || this._disabling) return;
+    for (const w of this._registry.all()) {
+      if (w.spark && w.spark.setEnabled) w.spark.setEnabled(true);
+    }
+  }
+
+  _freezeUi() {
+    if (!this._registry || this._disabling) return;
+    for (const w of this._registry.all()) {
+      if (w.spark && w.spark.setEnabled) w.spark.setEnabled(false);
+    }
+  }
+
+  /** Push the most recent telemetry sample into the popover widgets. */
+  _flushLatestData() {
+    if (!this._latestData || !this._registry || this._disabling) return;
+    const data = this._latestData;
+    for (const w of this._registry.all()) {
+      if (this._registry.isEnabled(w.id)) {
+        w.update(data, this._settings);
+      }
+    }
+    this._updateCores(data.cpu_cores);
+    this._updateCompactDot(data);
   }
 
   // ----------------------------- Telemetry handling -----------------------------
@@ -565,14 +601,10 @@ export default class SparklineMonitorExtension extends Extension {
     if (typeof data.paused === "boolean") return;
     if (data.interval_ms !== undefined && data.cpu === undefined) return;
 
-    // Update each widget
-    for (const w of this._registry.all()) {
-      if (this._registry.isEnabled(w.id)) {
-        w.update(data, this._settings);
-      }
-    }
+    this._latestData = data;
+    this._telemetryCounter++;
 
-    // Update panel capsule labels
+    // Panel capsule is always visible: update it on every sample.
     if (typeof data.cpu === "number" && this._cpuCell) {
       this._cpuCell.label.text = `${Math.round(data.cpu)}%`;
       if (this._cpuCell.sub) {
@@ -606,18 +638,30 @@ export default class SparklineMonitorExtension extends Extension {
       this._fanGauge.setValue(fanPct);
     }
 
+    this._updateCompactDot(data);
+
+    // Popover contents only need refreshing while visible.
+    if (!this._menuOpen) return;
+
+    // Update each widget
+    for (const w of this._registry.all()) {
+      if (this._registry.isEnabled(w.id)) {
+        w.update(data, this._settings);
+      }
+    }
+
     // CPU cores
     this._updateCores(data.cpu_cores);
+  }
 
-    // Compact status dot
-    if (this._compactDot && this._compactDot.visible) {
-      const highs = [data.cpu, data.ram, data.gpu_util].filter(
-        (v) => typeof v === "number",
-      );
-      if (highs.length > 0) {
-        const max = Math.max(...highs);
-        this._applyBandColor(this._compactDot, max / 100.0);
-      }
+  _updateCompactDot(data) {
+    if (!this._compactDot || !this._compactDot.visible) return;
+    const highs = [data.cpu, data.ram, data.gpu_util].filter(
+      (v) => typeof v === "number",
+    );
+    if (highs.length > 0) {
+      const max = Math.max(...highs);
+      this._applyBandColor(this._compactDot, max / 100.0);
     }
   }
 

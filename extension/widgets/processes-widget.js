@@ -16,6 +16,7 @@ export function createProcessesWidget() {
   card.addExtraRow(procList);
 
   const procRows = [];
+  let updateCount = 0;
 
   function syncProcRows(parent, rows, dataList) {
     while (rows.length < dataList.length) {
@@ -36,12 +37,12 @@ export function createProcessesWidget() {
       rows.push({ row: rowBox, nameLbl, valLbl });
     }
     dataList.forEach(([name, value], i) => {
-      rows[i].nameLbl.text = name;
-      rows[i].valLbl.text = value;
-      rows[i].row.visible = true;
+      if (rows[i].nameLbl.text !== name) rows[i].nameLbl.text = name;
+      if (rows[i].valLbl.text !== value) rows[i].valLbl.text = value;
+      if (!rows[i].row.visible) rows[i].row.visible = true;
     });
     for (let i = dataList.length; i < rows.length; i++) {
-      rows[i].row.visible = false;
+      if (rows[i].row.visible) rows[i].row.visible = false;
     }
   }
 
@@ -50,6 +51,8 @@ export function createProcessesWidget() {
     title: "Top Processes",
     card,
     update(data) {
+      updateCount++;
+      if (updateCount % 3 !== 0) return;
       const procData = Array.isArray(data.top)
         ? data.top.map((p) => [
             p.name || `PID ${p.pid || "?"}`,

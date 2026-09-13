@@ -32,12 +32,12 @@ export function createFanWidget() {
       rows.push({ row: rowBox, nameLbl, valLbl });
     }
     dataList.forEach(([name, value], i) => {
-      rows[i].nameLbl.text = name;
-      rows[i].valLbl.text = value;
-      rows[i].row.visible = true;
+      if (rows[i].nameLbl.text !== name) rows[i].nameLbl.text = name;
+      if (rows[i].valLbl.text !== value) rows[i].valLbl.text = value;
+      if (!rows[i].row.visible) rows[i].row.visible = true;
     });
     for (let i = dataList.length; i < rows.length; i++) {
-      rows[i].row.visible = false;
+      if (rows[i].row.visible) rows[i].row.visible = false;
     }
   }
 

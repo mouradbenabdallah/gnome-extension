@@ -30,6 +30,23 @@ class Sparkline extends St.DrawingArea {
         this._alertColor = { r: 0.94, g: 0.27, b: 0.27 }; // #ef4444
         this._peak = 0.0; // Auto-scaling peak so raw units (KB/s) graph nicely
         this._repaintPending = false;
+        this._enabled = true;   // When false, samples are buffered but not drawn
+        this._lastPaintTime = 0;
+        this._repaintTimeout = 0;
+        this._destroyed = false;
+        this.connect('destroy', () => {
+            this._destroyed = true;
+            if (this._repaintTimeout) {
+                GLib.source_remove(this._repaintTimeout);
+                this._repaintTimeout = 0;
+            }
+        });
+    }
+
+    setEnabled(enabled) {
+        if (this._enabled === enabled) return;
+        this._enabled = enabled;
+        if (enabled && !this._destroyed) this._scheduleRepaint();
     }
 
     _parseHexColor(hex) {
@@ -67,10 +84,28 @@ class Sparkline extends St.DrawingArea {
     }
 
     _scheduleRepaint() {
-        if (this._repaintPending) return;
+        if (!this._enabled || this._destroyed || this._repaintPending) return;
+        const now = GLib.get_monotonic_time() / 1000;
+        if (now - this._lastPaintTime < 120) {
+            // Coalesce bursts of samples into a single deferred repaint.
+            if (!this._repaintTimeout) {
+                this._repaintTimeout = GLib.timeout_add(
+                    GLib.PRIORITY_DEFAULT_IDLE,
+                    120,
+                    () => {
+                        this._repaintTimeout = 0;
+                        this._scheduleRepaint();
+                        return GLib.SOURCE_REMOVE;
+                    },
+                );
+            }
+            return;
+        }
         this._repaintPending = true;
         GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
             this._repaintPending = false;
+            if (this._destroyed) return GLib.SOURCE_REMOVE;
+            this._lastPaintTime = GLib.get_monotonic_time() / 1000;
             this.queue_repaint();
             return GLib.SOURCE_REMOVE;
         });
