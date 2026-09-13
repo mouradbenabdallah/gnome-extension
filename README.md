@@ -19,7 +19,7 @@ Features:
 - **History overview** — ~30 s Activity-Monitor-style CPU graph
 - **Compact mode** — collapse the panel to a single status dot colored by the worst metric
 - **Load alerts** — OSD notification + in-card banner, with *recovery* notifications when load clears
-- **Pause while locked** — telemetry pauses when the screen locks (saves battery/CPU)
+- **Pause while locked** — telemetry pauses when the screen locks (saves power/CPU)
 - **Suspend-safe** — re-initializes GPU/temp sensors after wake
 - **Popover animation** — springy scale/fade open & close
 - **Menu** — Pause telemetry, Compact mode, Reinitialize sensors, Settings

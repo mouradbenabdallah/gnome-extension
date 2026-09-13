@@ -151,7 +151,7 @@ fn main() {
         let top = process_collector.sample();
         let cpu_temp = thermal::sample_cpu_temp();
 
-        // GPU polling: sample every other tick or >= 2000ms to preserve battery P-states
+        // GPU polling: sample every other tick or >= 2000ms to preserve CPU P-states
         if tick_counter % 2 == 0 || interval_ms >= 2000 {
             last_gpu = gpu_collector.sample();
         }

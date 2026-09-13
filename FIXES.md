@@ -217,7 +217,6 @@ Possible widgets:
 - Fan
 - Network
 - Disk I/O
-- Battery
 - Temperature
 - History
 - Top Processes
@@ -234,7 +233,6 @@ GPU              ON
 Fan              ON
 Network          OFF
 Disk             ON
-Battery          OFF
 Top Processes    OFF
 
 The UI should immediately reflect these changes.
@@ -252,7 +250,6 @@ MetricWidgetRegistry
   Fan
   Network
   Disk
-  Battery
   CPUCores
   History
   Processes
@@ -575,7 +572,6 @@ extension/
 │   ├── fan-widget.js
 │   ├── network-widget.js
 │   ├── disk-widget.js
-│   ├── battery-widget.js
 │   ├── history-widget.js
 │   └── processes-widget.js
 ├── ui/
@@ -602,7 +598,6 @@ Do not break:
 - fan telemetry
 - network telemetry
 - disk telemetry
-- battery detection
 - temperature detection
 - top processes
 - history

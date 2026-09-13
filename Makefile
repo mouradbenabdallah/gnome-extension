@@ -25,6 +25,8 @@ dist: build dist-dir
 	cp $(EXT_DIR)/ring_gauge.js $(DIST_DIR)/
 	cp $(EXT_DIR)/sparkline.js $(DIST_DIR)/
 	cp $(EXT_DIR)/stylesheet.css $(DIST_DIR)/
+	mkdir -p $(DIST_DIR)/widgets
+	cp $(EXT_DIR)/widgets/*.js $(DIST_DIR)/widgets/
 	mkdir -p $(DIST_DIR)/schemas
 	cp $(EXT_DIR)/schemas/*.xml $(DIST_DIR)/schemas/
 	(cd $(DIST_DIR) && zip -qr ../$(ZIP_NAME) .)

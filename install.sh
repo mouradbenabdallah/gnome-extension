@@ -41,6 +41,13 @@ if [ -f "$SCRIPT_DIR/extension/sparkline.js" ]; then
     cp "$SCRIPT_DIR/extension/sparkline.js" "$DEST_DIR/"
 fi
 cp "$SCRIPT_DIR/extension/stylesheet.css" "$DEST_DIR/"
+
+# 4b. Copy widget modules
+if [ -d "$SCRIPT_DIR/extension/widgets" ]; then
+    mkdir -p "$DEST_DIR/widgets"
+    cp "$SCRIPT_DIR/extension/widgets/"*.js "$DEST_DIR/widgets/"
+    echo "[+] Widget modules installed."
+fi
 cp "$SCRIPT_DIR/daemon/target/release/sparkline-daemon" "$DEST_DIR/bin/"
 chmod +x "$DEST_DIR/bin/sparkline-daemon"
 

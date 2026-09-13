@@ -10,18 +10,20 @@ import Gtk from "gi://Gtk";
 
 import { RingGauge } from "./ring_gauge.js";
 import { Sparkline } from "./sparkline.js";
+import { WidgetRegistry } from "./widgets/widget-registry.js";
+import { MetricCard } from "./widgets/metric-card.js";
+import { createCpuWidget } from "./widgets/cpu-widget.js";
+import { createMemoryWidget } from "./widgets/memory-widget.js";
+import { createGpuWidget } from "./widgets/gpu-widget.js";
+import { createFanWidget } from "./widgets/fan-widget.js";
+import { createNetworkWidget } from "./widgets/network-widget.js";
+import { createDiskWidget } from "./widgets/disk-widget.js";
+import { createHistoryWidget } from "./widgets/history-widget.js";
+import { createProcessesWidget } from "./widgets/processes-widget.js";
 
 const SCHEMA_ID = "org.gnome.shell.extensions.sparkline-monitor";
 const SERVICE_SOCKET = "codenotch-monitor.service.sock";
 const CHILD_SOCKET = "codenotch-monitor.child.sock";
-const HISTORY_POINTS = 30;
-
-const BAND_CLASSES = [
-  "codenotch-fill-ample",
-  "codenotch-fill-watch",
-  "codenotch-fill-critical",
-  "codenotch-fill-exhausted",
-];
 
 export default class SparklineMonitorExtension extends Extension {
   enable() {
@@ -36,44 +38,82 @@ export default class SparklineMonitorExtension extends Extension {
     this._restartBackoff = 2000;
     this._disabling = false;
     this._intentionalExit = false;
-
     this._manualPaused = false;
     this._pauseWanted = false;
-    this._cpuHistory = [];
 
-    this._alertConsec = { cpu: 0, gpu: 0, cpuTemp: 0, gpuTemp: 0 };
-    this._activeAlerts = {};
-    this._fanRows = [];
-    this._procRows = [];
+    this._coreBars = [];
 
     this._loadSettings();
+    this._setupWidgetRegistry();
 
     // 1. Create Panel Indicator Button
     this._indicator = new PanelMenu.Button(0.0, this.metadata.name, false);
 
-    // 2. Codenotch Notch Capsule (vertical stack: CPU / RAM / Fan)
+    // 2. Codenotch Notch Capsule (horizontal layout)
+    this._buildPanelCapsule();
+
+    // 3. Build Liquid Glass Popover Card
+    this._buildGlassCard();
+
+    // 4. Add to GNOME Shell status area
+    Main.panel.addToStatusArea(this.uuid, this._indicator);
+    Main.panel.add_style_class_name("codenotch-vertical-panel");
+
+    // 5. Apply settings
+    this._applyUiSettings();
+    this._applyPalette();
+
+    // 6. Pause telemetry while locked
+    this._updatePauseState();
+    this._lockWatchdog = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+      this._updatePauseState();
+      return GLib.SOURCE_CONTINUE;
+    });
+
+    // 7. Re-detect sensors after suspend/wake
+    this._setupSleepListener();
+
+    // 8. Connect to daemon
+    this._startDaemon();
+  }
+
+  // ----------------------------- Widget Registry -----------------------------
+
+  _setupWidgetRegistry() {
+    this._registry = new WidgetRegistry(this._settings);
+    this._registry.register(createCpuWidget());
+    this._registry.register(createMemoryWidget());
+    this._registry.register(createGpuWidget());
+    this._registry.register(createFanWidget());
+    this._registry.register(createNetworkWidget());
+    this._registry.register(createDiskWidget());
+    this._registry.register(createHistoryWidget());
+    this._registry.register(createProcessesWidget());
+    this._registry.loadOrder();
+  }
+
+  // ----------------------------- Panel Capsule -----------------------------
+
+  _buildPanelCapsule() {
     const notchBox = new St.BoxLayout({
       style_class: "codenotch-notch-box",
-      vertical: true,
+      vertical: false,
       y_align: Clutter.ActorAlign.CENTER,
       x_align: Clutter.ActorAlign.CENTER,
       reactive: true,
     });
 
     // --- CPU Cell ---
-    const cpuBox = this._addPanelCell("cpu");
-    notchBox.add_child(cpuBox);
-    this._cpuCell = cpuBox;
+    this._cpuCell = this._addPanelCell("cpu");
+    notchBox.add_child(this._cpuCell.actor);
 
     // --- RAM Cell ---
-    const ramBox = this._addPanelCell("ram");
-    notchBox.add_child(ramBox);
-    this._ramCell = ramBox;
+    this._ramCell = this._addPanelCell("ram");
+    notchBox.add_child(this._ramCell.actor);
 
     // --- Fan Cell ---
-    const fanBox = this._addPanelCell("fan");
-    notchBox.add_child(fanBox);
-    this._fanCell = fanBox;
+    this._fanCell = this._addPanelCell("fan");
+    notchBox.add_child(this._fanCell.actor);
 
     // --- Compact status dot ---
     this._compactDot = new St.Widget({
@@ -84,93 +124,53 @@ export default class SparklineMonitorExtension extends Extension {
     notchBox.add_child(this._compactDot);
 
     this._indicator.add_child(notchBox);
-
-    // 3. Build Codenotch Tooltip Card Menu
-    this._buildCodenotchCard();
-
-    // 4. Add to GNOME Shell status area
-    Main.panel.addToStatusArea(this.uuid, this._indicator);
-
-    // Grow the top panel to fit the vertical capsule.
-    Main.panel.add_style_class_name("codenotch-vertical-panel");
-
-    // 5. Apply settings-driven visibility & palette
-    this._applyUiSettings();
-    this._applyPalette();
-
-    // 6. Pause telemetry while the screen is locked / away
-    this._updatePauseState();
-    this._lockWatchdog = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
-      this._updatePauseState();
-      return GLib.SOURCE_CONTINUE;
-    });
-
-    // 7. Re-detect sensors after suspend/wake
-    this._setupSleepListener();
-
-    // 8. Connect to a running daemon (systemd service or child fallback)
-    this._startDaemon();
   }
 
   _addPanelCell(type) {
-    const cell = new St.BoxLayout({
+    const wrap = new St.BoxLayout({
       style_class: "codenotch-metric-cell",
       vertical: false,
       y_align: Clutter.ActorAlign.CENTER,
     });
-    const labelBox = new St.BoxLayout({
+
+    let gauge, label, sub;
+    const size = 24;
+    const sw = 2.4;
+
+    if (type === "cpu") {
+      gauge = new RingGauge({ type: "cpu", size, strokeWidth: sw });
+      this._cpuGauge = gauge;
+    } else if (type === "ram") {
+      gauge = new RingGauge({ type: "ram", size, strokeWidth: sw });
+      this._ramGauge = gauge;
+    } else if (type === "fan") {
+      gauge = new RingGauge({ type: "fan", size, strokeWidth: sw });
+      this._fanGauge = gauge;
+    }
+
+    label = new St.Label({
+      text: "0%",
+      style_class: "codenotch-value-label",
+      y_align: Clutter.ActorAlign.CENTER,
+    });
+    sub = new St.Label({
+      text: "",
+      style_class: "codenotch-value-sublabel",
+      y_align: Clutter.ActorAlign.CENTER,
+    });
+
+    const labelsBox = new St.BoxLayout({
       vertical: true,
       y_align: Clutter.ActorAlign.CENTER,
       style_class: "codenotch-metric-labels",
     });
-    if (type === "cpu") {
-      this._cpuGauge = new RingGauge({ type: "cpu", size: 28, strokeWidth: 2.8 });
-      this._cpuLabel = new St.Label({
-        text: "0%",
-        style_class: "codenotch-value-label",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-      this._cpuSub = new St.Label({
-        text: "",
-        style_class: "codenotch-value-sublabel",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-      cell.add_child(this._cpuGauge);
-      labelBox.add_child(this._cpuLabel);
-      labelBox.add_child(this._cpuSub);
-    } else if (type === "ram") {
-      this._ramGauge = new RingGauge({ type: "ram", size: 28, strokeWidth: 2.8 });
-      this._ramLabel = new St.Label({
-        text: "0%",
-        style_class: "codenotch-value-label",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-      this._ramSub = new St.Label({
-        text: "",
-        style_class: "codenotch-value-sublabel",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-      cell.add_child(this._ramGauge);
-      labelBox.add_child(this._ramLabel);
-      labelBox.add_child(this._ramSub);
-    } else if (type === "fan") {
-      this._fanGauge = new RingGauge({ type: "fan", size: 28, strokeWidth: 2.8 });
-      this._fanLabel = new St.Label({
-        text: "0%",
-        style_class: "codenotch-value-label",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-      this._fanSub = new St.Label({
-        text: "",
-        style_class: "codenotch-value-sublabel",
-        y_align: Clutter.ActorAlign.CENTER,
-      });
-      cell.add_child(this._fanGauge);
-      labelBox.add_child(this._fanLabel);
-      labelBox.add_child(this._fanSub);
-    }
-    cell.add_child(labelBox);
-    return cell;
+    labelsBox.add_child(label);
+    labelsBox.add_child(sub);
+
+    wrap.add_child(gauge);
+    wrap.add_child(labelsBox);
+
+    return { actor: wrap, gauge, label, sub };
   }
 
   // ----------------------------- Settings -----------------------------
@@ -210,13 +210,19 @@ export default class SparklineMonitorExtension extends Extension {
     return this._settings ? this._settings.get_double(key) : fallback;
   }
 
+  _getString(key, fallback) {
+    return this._settings ? this._settings.get_string(key) || fallback : fallback;
+  }
+
   _setBool(key, value) {
     if (this._settings) this._settings.set_boolean(key, value);
   }
 
   _onSettingsChanged(_settings, key) {
     if (key === "poll-interval") {
-      this._sendCommand(`INTERVAL ${Math.max(200, this._getInt("poll-interval", 1200))}`);
+      this._sendCommand(
+        `INTERVAL ${Math.max(200, this._getInt("poll-interval", 1200))}`,
+      );
       return;
     }
     if (key === "pause-away") {
@@ -224,6 +230,10 @@ export default class SparklineMonitorExtension extends Extension {
     }
     if (key === "mono-palette") {
       this._applyPalette();
+    }
+    if (key === "widget-order") {
+      this._registry.loadOrder();
+      this._rebuildPopoverCards();
     }
     this._applyUiSettings();
   }
@@ -241,27 +251,24 @@ export default class SparklineMonitorExtension extends Extension {
     const showCpu = this._getBool("show-cpu", true);
     const showRam = this._getBool("show-ram", true);
     const showFan = this._getBool("show-fan", true);
-    const showGpu = this._getBool("show-gpu", true);
-    const showNet = this._getBool("show-network", true);
-    const showDisk = this._getBool("show-disk", true);
-    const showProcs = this._getBool("show-processes", true);
-    const showHistory = this._getBool("show-history", true);
 
-    if (this._cpuCell) this._cpuCell.visible = !compact && showCpu;
-    if (this._ramCell) this._ramCell.visible = !compact && showRam;
-    if (this._fanCell) this._fanCell.visible = !compact && showFan;
+    // Panel capsule visibility
+    if (this._cpuCell) this._cpuCell.actor.visible = !compact && showCpu;
+    if (this._ramCell) this._ramCell.actor.visible = !compact && showRam;
+    if (this._fanCell) this._fanCell.actor.visible = !compact && showFan;
     if (this._compactDot) this._compactDot.visible = compact;
 
-    if (this._menuItems) {
-      this._menuItems.cpu.visible = showCpu;
-      this._menuItems.cores.visible = showCpu;
-      this._menuItems.ram.visible = showRam;
-      this._menuItems.fan.visible = showFan;
-      this._menuItems.history.visible = showHistory;
-      this._menuItems.gpu.visible = showGpu;
-      this._menuItems.network.visible = showNet;
-      this._menuItems.disk.visible = showDisk;
-      this._menuItems.processes.visible = showProcs;
+    // Popover card visibility
+    for (const w of this._registry.all()) {
+      const enabled = this._registry.isEnabled(w.id);
+      w.card.setVisible(enabled);
+    }
+
+    // Update glass opacity
+    if (this._glassMenuBox) {
+      const opacity = this._getDouble("glass-opacity", 0.88);
+      const alpha = Math.round(opacity * 255);
+      this._glassMenuBox.opacity = alpha;
     }
 
     if (this._compactSwitch) {
@@ -269,22 +276,27 @@ export default class SparklineMonitorExtension extends Extension {
     }
   }
 
-  // ----------------------------- Popover card -----------------------------
+  // ----------------------------- Liquid Glass Popover -----------------------------
 
-  _buildCodenotchCard() {
+  _buildGlassCard() {
     const menu = this._indicator.menu;
     menu.box.add_style_class_name("codenotch-card-menu");
     menu.actor.add_style_class_name("codenotch-menu-boxpointer");
     menu.connect("open-state-changed", this._onMenuStateChanged.bind(this));
 
+    this._glassMenuBox = menu.box;
+
     this._menuItems = {};
 
-    // Header
+    // --- Header ---
     const headerItem = new PopupMenu.PopupBaseMenuItem({
       reactive: false,
       can_focus: false,
     });
-    const headerBox = new St.BoxLayout({ vertical: true });
+    const headerBox = new St.BoxLayout({
+      vertical: true,
+      style_class: "codenotch-glass-header",
+    });
     const titleLabel = new St.Label({
       text: "System Monitor",
       style_class: "codenotch-card-header",
@@ -293,35 +305,33 @@ export default class SparklineMonitorExtension extends Extension {
       text: "Live Hardware Telemetry",
       style_class: "codenotch-card-subtitle",
     });
-    this._bannerLabel = new St.Label({
-      text: "",
-      style_class: "codenotch-alert-banner",
-      visible: false,
-    });
     headerBox.add_child(titleLabel);
     headerBox.add_child(subLabel);
-    headerBox.add_child(this._bannerLabel);
     headerItem.add_child(headerBox);
     menu.addMenuItem(headerItem);
 
     menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-    // --- CPU Section ---
-    this._menuItems.cpu = this._addSection(menu, {
-      title: "CPU Utilization",
-      initialVal: "0.0%",
+    // --- Widget grid container ---
+    this._widgetGrid = new St.BoxLayout({
+      style_class: "codenotch-glass-grid",
+      x_expand: true,
     });
-    this._cpuSpark = new Sparkline({ color: "#5bc0ff", width: 190, height: 22 });
-    this._sectionAddSpark(this._menuItems.cpu, this._cpuSpark);
+    this._widgetGridWrap = new PopupMenu.PopupBaseMenuItem({
+      reactive: false,
+      can_focus: false,
+    });
+    this._widgetGridWrap.add_child(this._widgetGrid);
+    menu.addMenuItem(this._widgetGridWrap);
 
-    // --- CPU Cores grid (populated on first data) ---
+    // --- CPU Cores grid (optional, below the grid) ---
     const coresItem = new PopupMenu.PopupBaseMenuItem({
       reactive: false,
       can_focus: false,
     });
     const coresWrap = new St.BoxLayout({
       vertical: true,
-      style_class: "codenotch-card-section",
+      style_class: "codenotch-card-section codenotch-cores-section",
       x_expand: true,
     });
     const coresTitle = new St.Label({
@@ -337,109 +347,22 @@ export default class SparklineMonitorExtension extends Extension {
     menu.addMenuItem(coresItem);
     this._menuItems.cores = coresItem;
 
-    // --- History overview (last ~30s of CPU) ---
-    const historyItem = new PopupMenu.PopupBaseMenuItem({
-      reactive: false,
-      can_focus: false,
-    });
-    const historyWrap = new St.BoxLayout({
-      vertical: true,
-      style_class: "codenotch-card-section",
-      x_expand: true,
-    });
-    const historyTitle = new St.Label({
-      text: "History (last 30 s)",
-      style_class: "codenotch-card-label",
-      x_expand: true,
-    });
-    this._historySpark = new Sparkline({ color: "#5bc0ff", width: 190, height: 26 });
-    const historyGraphWrap = new St.BoxLayout({
-      style_class: "codenotch-sparkline-wrap",
-      x_expand: true,
-    });
-    historyGraphWrap.add_child(this._historySpark);
-    historyWrap.add_child(historyTitle);
-    historyWrap.add_child(historyGraphWrap);
-    historyItem.add_child(historyWrap);
-    menu.addMenuItem(historyItem);
-    this._menuItems.history = historyItem;
-
-    // --- RAM Section ---
-    this._menuItems.ram = this._addSection(menu, {
-      title: "RAM Memory",
-      initialVal: "0.0 / 0.0 GB (0%)",
-    });
-
-    // --- Fan Section ---
-    this._menuItems.fan = this._addSection(menu, {
-      title: "Cooling Fans",
-      initialVal: "Detecting…",
-    });
-    this._fanTitleLbl = this._menuItems.fan.titleLbl;
-    this._fanSubList = new St.BoxLayout({ vertical: true });
-    this._fanSubList.add_style_class_name("codenotch-fansublist");
-    this._menuItems.fan.container.add_child(this._fanSubList);
-
-    // --- GPU Section ---
-    this._menuItems.gpu = this._addSection(menu, {
-      title: "GPU",
-      initialVal: "Detecting…",
-    });
-    this._gpuTitleLbl = this._menuItems.gpu.titleLbl;
-    this._gpuSpark = new Sparkline({ color: "#00ff88", width: 190, height: 22 });
-    this._sectionAddSpark(this._menuItems.gpu, this._gpuSpark);
-
-    // --- Network Section ---
-    this._menuItems.network = this._addSection(menu, {
-      title: "Network",
-      initialVal: "0 KB/s",
-    });
-    this._netRxSpark = new Sparkline({ color: "#00d2ff", width: 90, height: 22 });
-    this._netTxSpark = new Sparkline({ color: "#ff7ad9", width: 90, height: 22 });
-    this._sectionAddSparkPair(this._menuItems.network, this._netRxSpark, this._netTxSpark);
-
-    // --- Disk Section ---
-    this._menuItems.disk = this._addSection(menu, {
-      title: "Disk I/O",
-      initialVal: "0 KB/s",
-    });
-    this._diskReadSpark = new Sparkline({ color: "#00ff88", width: 90, height: 22 });
-    this._diskWriteSpark = new Sparkline({ color: "#ffb000", width: 90, height: 22 });
-    this._sectionAddSparkPair(this._menuItems.disk, this._diskReadSpark, this._diskWriteSpark);
-
-    // --- Top Processes Section ---
-    const procItem = new PopupMenu.PopupBaseMenuItem({
-      reactive: false,
-      can_focus: false,
-    });
-    const procWrap = new St.BoxLayout({
-      vertical: true,
-      style_class: "codenotch-card-section",
-      x_expand: true,
-    });
-    const procTitle = new St.Label({
-      text: "Top Processes",
-      style_class: "codenotch-card-label",
-      x_expand: true,
-    });
-    this._procList = new St.BoxLayout({ vertical: true });
-    procWrap.add_child(procTitle);
-    procWrap.add_child(this._procList);
-    procItem.add_child(procWrap);
-    menu.addMenuItem(procItem);
-    this._menuItems.processes = procItem;
+    // Populate widget cards into the grid
+    this._populateWidgetGrid();
 
     menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
-    // --- Pause telemetry (manual override) ---
-    this._pauseSwitch = new PopupMenu.PopupSwitchMenuItem("Pause telemetry", this._manualPaused);
+    // --- Controls ---
+    this._pauseSwitch = new PopupMenu.PopupSwitchMenuItem(
+      "Pause telemetry",
+      this._manualPaused,
+    );
     this._pauseSwitch.connect("toggled", (_item, state) => {
       this._manualPaused = state;
       this._updatePauseState();
     });
     menu.addMenuItem(this._pauseSwitch);
 
-    // --- Compact mode quick toggle ---
     this._compactSwitch = new PopupMenu.PopupSwitchMenuItem(
       "Compact mode (status dot)",
       this._getBool("compact-mode", false),
@@ -449,84 +372,67 @@ export default class SparklineMonitorExtension extends Extension {
     });
     menu.addMenuItem(this._compactSwitch);
 
-    // --- Reinitialize sensors (after driver reload / suspend quirks) ---
     const reinitItem = new PopupMenu.PopupMenuItem("Reinitialize sensors");
     reinitItem.connect("activate", () => {
       this._sendCommand("RESET");
     });
     menu.addMenuItem(reinitItem);
 
-    // --- Settings ---
-    const settingsItem = new PopupMenu.PopupMenuItem("Settings…");
+    const settingsItem = new PopupMenu.PopupMenuItem("Settings\u2026");
     settingsItem.connect("activate", () => {
       this._openPreferences();
     });
     menu.addMenuItem(settingsItem);
   }
 
-  /** Builds a titled section item with a value label + progress bar. */
-  _addSection(menu, { title, initialVal }) {
-    const item = new PopupMenu.PopupBaseMenuItem({
-      reactive: false,
-      can_focus: false,
-    });
-    const container = new St.BoxLayout({
+  _populateWidgetGrid() {
+    // Clear existing children
+    this._widgetGrid.destroy_all_children();
+
+    const enabled = this._registry.enabled();
+    const isCompact = this._getBool("compact-mode", false);
+
+    // Build a 2-column horizontal grid layout
+    const leftCol = new St.BoxLayout({
       vertical: true,
-      style_class: "codenotch-card-section",
+      style_class: "codenotch-glass-column",
       x_expand: true,
     });
-    const row = new St.BoxLayout({ style_class: "codenotch-card-row", x_expand: true });
-    const titleLbl = new St.Label({
-      text: title,
-      style_class: "codenotch-card-label",
+    const rightCol = new St.BoxLayout({
+      vertical: true,
+      style_class: "codenotch-glass-column",
       x_expand: true,
     });
-    const valLbl = new St.Label({
-      text: initialVal,
-      style_class: "codenotch-card-val",
-    });
-    row.add_child(titleLbl);
-    row.add_child(valLbl);
 
-    const track = new St.BoxLayout({ style_class: "codenotch-progress-track", x_expand: true });
-    const bar = new St.Widget({
-      style_class: "codenotch-progress-fill codenotch-fill-ample",
-      width: 0,
-    });
-    track.add_child(bar);
+    // CPU cores section is part of left column
+    if (this._menuItems.cores) {
+      this._menuItems.cores.visible = this._registry.isEnabled("cpu");
+    }
 
-    container.add_child(row);
-    container.add_child(track);
-    item.add_child(container);
-    menu.addMenuItem(item);
-    return { item, container, titleLbl, valLbl, bar };
+    enabled.forEach((w, i) => {
+      if (isCompact) return;
+      const col = i % 2 === 0 ? leftCol : rightCol;
+      col.add_child(w.card.actor);
+    });
+
+    this._widgetGrid.add_child(leftCol);
+    this._widgetGrid.add_child(rightCol);
+
+    // Hide cores in compact mode
+    if (this._menuItems.cores) {
+      this._menuItems.cores.visible = !isCompact && this._registry.isEnabled("cpu");
+    }
   }
 
-  _sectionAddSpark(section, spark) {
-    const wrap = new St.BoxLayout({
-      style_class: "codenotch-sparkline-wrap",
-      x_expand: true,
-    });
-    wrap.add_child(spark);
-    section.container.add_child(wrap);
-    return wrap;
-  }
-
-  _sectionAddSparkPair(section, sparkA, sparkB) {
-    const wrap = new St.BoxLayout({
-      style_class: "codenotch-sparkline-pair-wrap",
-      x_expand: true,
-    });
-    wrap.add_child(sparkA);
-    wrap.add_child(sparkB);
-    section.container.add_child(wrap);
-    return wrap;
+  _rebuildPopoverCards() {
+    // Rebuild the widget grid when order changes
+    this._populateWidgetGrid();
   }
 
   _buildCoreGrid(count) {
     this._coresContainer.destroy_all_children();
     this._coreBars = [];
-    const perRow = 4;
+    const perRow = 6;
     const rows = Math.ceil(count / perRow);
     for (let r = 0; r < rows; r++) {
       const rowBox = new St.BoxLayout({
@@ -571,61 +477,20 @@ export default class SparklineMonitorExtension extends Extension {
     }
   }
 
-  /** Keeps `rows` in sync with `dataList` of [name, value] pairs, reusing widgets. */
-  _syncRows(parent, rows, dataList, opts = {}) {
-    const valStyle = opts.valStyle || "codenotch-card-subtitle";
-    while (rows.length < dataList.length) {
-      const rowBox = new St.BoxLayout({
-        style_class: "codenotch-card-row",
-        x_expand: true,
-      });
-      const nameLbl = new St.Label({
-        style_class: "codenotch-card-subtitle",
-        x_expand: true,
-      });
-      const valLbl = new St.Label({
-        style_class: valStyle,
-      });
-      rowBox.add_child(nameLbl);
-      rowBox.add_child(valLbl);
-      parent.add_child(rowBox);
-      rows.push({ row: rowBox, nameLbl, valLbl });
-    }
-    dataList.forEach(([name, value], i) => {
-      rows[i].nameLbl.text = name;
-      rows[i].valLbl.text = value;
-      rows[i].row.visible = true;
-    });
-    for (let i = dataList.length; i < rows.length; i++) {
-      rows[i].row.visible = false;
-    }
-  }
-
-  _bandClass(fraction) {
-    if (fraction < 0.5) return "codenotch-fill-ample";
-    if (fraction < 0.75) return "codenotch-fill-watch";
-    if (fraction < 0.9) return "codenotch-fill-critical";
-    return "codenotch-fill-exhausted";
-  }
-
   _applyBandColor(widget, fraction) {
-    for (const cls of BAND_CLASSES) widget.remove_style_class_name(cls);
-    widget.add_style_class_name(this._bandClass(fraction));
+    let cls;
+    if (fraction < 0.5) cls = "codenotch-fill-ample";
+    else if (fraction < 0.75) cls = "codenotch-fill-watch";
+    else if (fraction < 0.9) cls = "codenotch-fill-critical";
+    else cls = "codenotch-fill-exhausted";
+
+    if (widget._lastBandClass === cls) return;
+    if (widget._lastBandClass) widget.remove_style_class_name(widget._lastBandClass);
+    widget.add_style_class_name(cls);
+    widget._lastBandClass = cls;
   }
 
-  _updateProgressBar(widget, fraction) {
-    const totalW = 190;
-    const fillW = Math.max(0, Math.min(totalW, Math.round(fraction * totalW)));
-    widget.width = fillW;
-    this._applyBandColor(widget, fraction);
-  }
-
-  _fmtRate(kbs) {
-    if (kbs >= 1024) return `${(kbs / 1024.0).toFixed(1)} MB/s`;
-    return `${Math.round(kbs)} KB/s`;
-  }
-
-  // ----------------------------- Popover animation -----------------------------
+  // ----------------------------- Popover Animation -----------------------------
 
   _onMenuStateChanged(menu, open) {
     const content = menu.box;
@@ -635,24 +500,24 @@ export default class SparklineMonitorExtension extends Extension {
       if (animate) {
         content.remove_all_transitions();
         content.set_pivot_point(0.5, 0);
-        content.scale_x = 0.88;
-        content.scale_y = 0.88;
+        content.scale_x = 0.96;
+        content.scale_y = 0.96;
         content.opacity = 0;
-        content.translation_y = -10;
+        content.translation_y = -8;
         content.ease_property("opacity", 255, {
-          duration: 200,
+          duration: 180,
           mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
         });
         content.ease_property("scale-x", 1, {
-          duration: 360,
+          duration: 260,
           mode: Clutter.AnimationMode.EASE_OUT_BACK,
         });
         content.ease_property("scale-y", 1, {
-          duration: 360,
+          duration: 260,
           mode: Clutter.AnimationMode.EASE_OUT_BACK,
         });
         content.ease_property("translation-y", 0, {
-          duration: 280,
+          duration: 220,
           mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
         });
       } else {
@@ -667,58 +532,22 @@ export default class SparklineMonitorExtension extends Extension {
       if (animate) {
         content.remove_all_transitions();
         content.ease_property("opacity", 0, {
-          duration: 130,
+          duration: 120,
           mode: Clutter.AnimationMode.EASE_IN_CUBIC,
         });
-        content.ease_property("scale-x", 0.92, {
-          duration: 160,
+        content.ease_property("scale-x", 0.97, {
+          duration: 140,
           mode: Clutter.AnimationMode.EASE_IN_CUBIC,
         });
-        content.ease_property("scale-y", 0.92, {
-          duration: 160,
+        content.ease_property("scale-y", 0.97, {
+          duration: 140,
           mode: Clutter.AnimationMode.EASE_IN_CUBIC,
         });
-        content.ease_property("translation-y", 6, {
-          duration: 160,
+        content.ease_property("translation-y", 5, {
+          duration: 140,
           mode: Clutter.AnimationMode.EASE_IN_CUBIC,
         });
       }
-    }
-  }
-
-  // ----------------------------- Alerts -----------------------------
-
-  _checkSustained(key, value, threshold, label) {
-    if (typeof value !== "number" || !Number.isFinite(value)) return;
-
-    if (value >= threshold) {
-      this._alertConsec[key] = (this._alertConsec[key] || 0) + 1;
-      if (this._alertConsec[key] >= 3 && !this._activeAlerts[key]) {
-        this._activeAlerts[key] = label;
-        this._renderAlerts();
-      }
-    } else if (value <= threshold - 5) {
-      this._alertConsec[key] = 0;
-      if (this._activeAlerts[key]) {
-        delete this._activeAlerts[key];
-        this._renderAlerts();
-      }
-    }
-  }
-
-  /** Joins whatever alerts are currently active into the popover banner. */
-  _renderAlerts() {
-    const msgs = Object.values(this._activeAlerts);
-    this._setBanner(msgs.length ? `⚠ ${msgs.join("  ·  ")}` : null);
-  }
-
-  _setBanner(text) {
-    if (!this._bannerLabel) return;
-    if (text) {
-      this._bannerLabel.text = text;
-      this._bannerLabel.visible = true;
-    } else {
-      this._bannerLabel.visible = false;
     }
   }
 
@@ -732,158 +561,64 @@ export default class SparklineMonitorExtension extends Extension {
       return;
     }
 
-    // Control lines (hello / paused / interval) are not metric samples.
     if (data.hello !== undefined) return;
     if (typeof data.paused === "boolean") return;
     if (data.interval_ms !== undefined && data.cpu === undefined) return;
 
-    // 1. CPU
-    if (typeof data.cpu === "number") {
-      this._cpuGauge.setValue(data.cpu);
-      this._cpuLabel.text = `${Math.round(data.cpu)}%`;
-      if (this._cpuSub) {
-        this._cpuSub.text =
-          this._getBool("show-cpu-temp", true) && typeof data.cpu_temp === "number"
-            ? `${data.cpu_temp}°C`
+    // Update each widget
+    for (const w of this._registry.all()) {
+      if (this._registry.isEnabled(w.id)) {
+        w.update(data, this._settings);
+      }
+    }
+
+    // Update panel capsule labels
+    if (typeof data.cpu === "number" && this._cpuCell) {
+      this._cpuCell.label.text = `${Math.round(data.cpu)}%`;
+      if (this._cpuCell.sub) {
+        this._cpuCell.sub.text =
+          this._getBool("show-cpu-temp", true) &&
+          typeof data.cpu_temp === "number"
+            ? `${data.cpu_temp}\u00B0C`
             : "";
       }
-      if (this._menuItems.cpu) {
-        let text = `${data.cpu.toFixed(1)}%`;
-        if (this._getBool("show-cpu-temp", true) && typeof data.cpu_temp === "number") {
-          text += `  ·  ${data.cpu_temp}°C`;
-        }
-        this._menuItems.cpu.valLbl.text = text;
-        this._updateProgressBar(this._menuItems.cpu.bar, data.cpu / 100.0);
+      this._cpuGauge.setValue(data.cpu);
+    }
+
+    if (typeof data.ram === "number" && this._ramCell) {
+      this._ramCell.label.text = `${Math.round(data.ram)}%`;
+      if (this._ramCell.sub) {
+        const usedGb =
+          data.ram_used_gb !== undefined ? data.ram_used_gb.toFixed(1) : "?";
+        const totalGb =
+          data.ram_total_gb !== undefined ? data.ram_total_gb.toFixed(1) : "?";
+        this._ramCell.sub.text = `${usedGb}G/${totalGb}G`;
       }
-      if (this._cpuSpark) this._cpuSpark.pushValue(data.cpu);
-      this._checkSustained("cpu", data.cpu, this._getDouble("cpu-alert", 85), `CPU ${Math.round(data.cpu)}%`);
-    }
-    this._updateCores(data.cpu_cores);
-
-    this._pushHistory(data.cpu);
-
-    // CPU temperature alert channel
-    if (typeof data.cpu_temp === "number") {
-      this._checkSustained(
-        "cpuTemp",
-        data.cpu_temp,
-        this._getDouble("temp-alert", 85),
-        `CPU temp ${Math.round(data.cpu_temp)}°C`,
-      );
-    }
-
-    // 2. RAM
-    if (typeof data.ram === "number") {
       this._ramGauge.setValue(data.ram);
-      this._ramLabel.text = `${Math.round(data.ram)}%`;
-      const usedGb =
-        data.ram_used_gb !== undefined ? `${data.ram_used_gb.toFixed(1)}` : "?";
-      const totalGb =
-        data.ram_total_gb !== undefined ? `${data.ram_total_gb.toFixed(1)}` : "?";
-      if (this._ramSub) {
-        this._ramSub.text = `${usedGb}G / ${totalGb}G`;
-      }
-      if (this._menuItems.ram)
-        this._menuItems.ram.valLbl.text = `${usedGb} / ${totalGb} GB (${data.ram.toFixed(1)}%)`;
-      this._updateProgressBar(this._menuItems.ram.bar, data.ram / 100.0);
     }
 
-    // 3. Fans
-    const fans = Array.isArray(data.fans) ? data.fans : [];
-    if (fans.length > 0 && this._fanTitleLbl) {
-      this._fanTitleLbl.text = fans.length === 1 ? "Cooling Fan" : `Cooling Fans (${fans.length})`;
-    }
     const fanPct = typeof data.fan_pct === "number" ? data.fan_pct : 0;
     const fanRpm = typeof data.fan_rpm === "number" ? data.fan_rpm : 0;
-    this._fanGauge.setValue(fanPct);
-    this._fanLabel.text = `${fanPct}%`;
-    if (this._fanSub) {
-      this._fanSub.text = fanRpm > 0 ? `${fanRpm} RPM` : "Stopped";
-    }
-    if (this._menuItems.fan) {
-      if (fanRpm > 0) {
-        this._menuItems.fan.valLbl.text = `${fanRpm} RPM (${fanPct}%)`;
-      } else {
-        this._menuItems.fan.valLbl.text = fanPct > 0 ? `${fanPct}%` : "Idle / Stopped";
-      }
-      this._updateProgressBar(this._menuItems.fan.bar, fanPct / 100.0);
+    if (this._fanCell) {
+      this._fanCell.label.text = `${fanPct}%`;
+      this._fanCell.sub.text =
+        fanRpm > 0 ? `${fanRpm} RPM` : "Stopped";
+      this._fanGauge.setValue(fanPct);
     }
 
-    // Fan sublist — one vertical block per fan (name on top, RPM + % below)
-    const fanRows = fans.map((f) => [
-      f.label || "Fan",
-      f.rpm > 0 ? `${f.rpm} RPM  ·  ${f.pct}%` : `${f.pct}%`,
-    ]);
-    this._syncRows(this._fanSubList, this._fanRows, fanRows, { valStyle: "codenotch-card-val" });
+    // CPU cores
+    this._updateCores(data.cpu_cores);
 
-    // 4. GPU
-    if (this._menuItems.gpu) {
-      const gpuUtil =
-        typeof data.gpu_util === "number" && data.gpu_util !== null ? data.gpu_util : 0;
-      const temp =
-        typeof data.gpu_temp === "number" && data.gpu_temp !== null
-          ? `${data.gpu_temp}°C`
-          : "--°C";
-      if (data.gpu_name && this._gpuTitleLbl)
-        this._gpuTitleLbl.text = `${data.gpu_name} GPU`;
-      const actionable = typeof data.gpu_util === "number";
-      this._menuItems.gpu.valLbl.text = actionable
-        ? `${data.gpu_util}%  ·  ${temp}`
-        : `Standby / Sleep  ·  ${temp}`;
-      this._updateProgressBar(this._menuItems.gpu.bar, gpuUtil / 100.0);
-      this._gpuSpark.pushValue(gpuUtil);
-      this._checkSustained("gpu", gpuUtil, this._getDouble("gpu-alert", 90), `GPU ${Math.round(gpuUtil)}%`);
-      if (typeof data.gpu_temp === "number")
-        this._checkSustained(
-          "gpuTemp",
-          data.gpu_temp,
-          this._getDouble("temp-alert", 85),
-          `GPU temp ${Math.round(data.gpu_temp)}°C`,
-        );
-    }
-
-    // 5. Network
-    if (this._menuItems.network) {
-      const rx = typeof data.net_rx_kbs === "number" ? data.net_rx_kbs : 0;
-      const tx = typeof data.net_tx_kbs === "number" ? data.net_tx_kbs : 0;
-      this._menuItems.network.valLbl.text = `↓ ${this._fmtRate(rx)}   ↑ ${this._fmtRate(tx)}`;
-      if (this._netRxSpark) this._netRxSpark.pushValue(rx);
-      if (this._netTxSpark) this._netTxSpark.pushValue(tx);
-    }
-
-    // 6. Disk
-    if (this._menuItems.disk) {
-      const rd = typeof data.disk_read_kbs === "number" ? data.disk_read_kbs : 0;
-      const wr = typeof data.disk_write_kbs === "number" ? data.disk_write_kbs : 0;
-      this._menuItems.disk.valLbl.text = `R ${this._fmtRate(rd)}  ·  W ${this._fmtRate(wr)}`;
-      if (this._diskReadSpark) this._diskReadSpark.pushValue(rd);
-      if (this._diskWriteSpark) this._diskWriteSpark.pushValue(wr);
-    }
-
-    // 7. Top processes (rows reused)
-    const procRows = Array.isArray(data.top)
-      ? data.top.map((p) => [
-          p.name || `PID ${p.pid || "?"}`,
-          p.cpu >= 100 ? ">99%" : `${Math.round(p.cpu)}%`,
-        ])
-      : [];
-    this._syncRows(this._procList, this._procRows, procRows);
-
-    // 8. Compact status dot color
+    // Compact status dot
     if (this._compactDot && this._compactDot.visible) {
-      const highs = [data.cpu, data.ram, data.gpu_util].filter((v) => typeof v === "number");
+      const highs = [data.cpu, data.ram, data.gpu_util].filter(
+        (v) => typeof v === "number",
+      );
       if (highs.length > 0) {
         const max = Math.max(...highs);
         this._applyBandColor(this._compactDot, max / 100.0);
       }
     }
-  }
-
-  _pushHistory(cpu) {
-    if (typeof cpu !== "number" || !this._historySpark) return;
-    this._cpuHistory.push(cpu);
-    while (this._cpuHistory.length > HISTORY_POINTS) this._cpuHistory.shift();
-    this._historySpark.setData(this._cpuHistory);
   }
 
   // ----------------------------- Daemon management -----------------------------
@@ -895,7 +630,6 @@ export default class SparklineMonitorExtension extends Extension {
       GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin", "sparkline-daemon"]),
       GLib.find_program_in_path("sparkline-daemon"),
     ];
-
     for (const candidate of candidates) {
       if (candidate && GLib.file_test(candidate, GLib.FileTest.IS_EXECUTABLE)) {
         return candidate;
@@ -912,7 +646,6 @@ export default class SparklineMonitorExtension extends Extension {
     ]);
   }
 
-  /** Priming the runtime dir used by the socket(s). */
   _ensureRuntimeDir(path) {
     const dir = GLib.path_get_dirname(path);
     if (!GLib.file_test(dir, GLib.FileTest.IS_DIR)) {
@@ -926,17 +659,16 @@ export default class SparklineMonitorExtension extends Extension {
     if (!this._cancellable || this._cancellable.is_cancelled()) return null;
     try {
       const client = new Gio.SocketClient();
-      const conn = client.connect(Gio.UnixSocketAddress.new(path), this._cancellable);
+      const conn = client.connect(
+        Gio.UnixSocketAddress.new(path),
+        this._cancellable,
+      );
       return conn;
     } catch (e) {
       return null;
     }
   }
 
-  /**
-   * Preferred startup: adopt an already-running daemon (systemd user service).
-   * Falls back to spawning our own child and connecting to it.
-   */
   _startDaemon() {
     this._restartBackoff = 2000;
     const servicePath = this._socketPath("service");
@@ -947,19 +679,17 @@ export default class SparklineMonitorExtension extends Extension {
       this._adoptSocket(conn, false);
       return;
     }
-
     this._spawnChild();
   }
 
   _spawnChild() {
     const daemonPath = this._findDaemonPath();
     if (!daemonPath) {
-      console.warn(`[${this.metadata.name}] sparkline-daemon binary not found. Running degraded.`);
-      if (this._menuItems && this._menuItems.cpu)
-        this._menuItems.cpu.valLbl.text = "Daemon binary missing. Re-run install.sh.";
+      console.warn(
+        `[${this.metadata.name}] sparkline-daemon binary not found. Running degraded.`,
+      );
       return;
     }
-
     try {
       this._proc = Gio.Subprocess.new(
         [daemonPath, "--listen", this._socketPath("child")],
@@ -968,17 +698,15 @@ export default class SparklineMonitorExtension extends Extension {
       this._monitorDaemon();
       this._retryConnect(0);
     } catch (err) {
-      console.error(`[${this.metadata.name}] Failed to spawn daemon: ${err.message}`);
+      console.error(
+        `[${this.metadata.name}] Failed to spawn daemon: ${err.message}`,
+      );
     }
   }
 
-  /**
-   * Keep trying to reach the child daemon once its socket is live. Retries with
-   * a growing delay instead of ever giving up, and falls back to the systemd
-   * service socket if it (re)appears while we wait.
-   */
   _retryConnect(attempt) {
-    if (this._disabling || !this._proc || this._cancellable?.is_cancelled()) return;
+    if (this._disabling || !this._proc || this._cancellable?.is_cancelled())
+      return;
     const conn = this._tryConnectSocket(this._socketPath("child"));
     if (conn) {
       this._adoptSocket(conn, true);
@@ -1012,14 +740,13 @@ export default class SparklineMonitorExtension extends Extension {
     });
     this._writeStream = conn.output_stream;
     this._restartBackoff = 2000;
-
-    // Synchronize the poll interval with the preference.
-    this._sendCommand(`INTERVAL ${Math.max(200, this._getInt("poll-interval", 1200))}`);
+    this._sendCommand(
+      `INTERVAL ${Math.max(200, this._getInt("poll-interval", 1200))}`,
+    );
     this._updatePauseState();
     this._readNextLine();
   }
 
-  /** Respawns/reconnects when the current data source goes away. */
   _handleDaemonGone() {
     this._conn = null;
     this._writeStream = null;
@@ -1028,7 +755,6 @@ export default class SparklineMonitorExtension extends Extension {
     this._scheduleRestart();
   }
 
-  /** Respawns the child if it exits unexpectedly (with backoff). */
   _monitorDaemon() {
     if (!this._proc) return;
     this._proc.wait_async(null, (proc, result) => {
@@ -1058,17 +784,13 @@ export default class SparklineMonitorExtension extends Extension {
   }
 
   _readNextLine() {
-    if (!this._stream || this._cancellable?.is_cancelled()) {
-      return;
-    }
-
+    if (!this._stream || this._cancellable?.is_cancelled()) return;
     this._stream.read_line_async(
       GLib.PRIORITY_DEFAULT,
       this._cancellable,
       (stream, result) => {
         try {
           const [bytes] = stream.read_line_finish_utf8(result);
-          // Ignore stale callbacks from a stream that was replaced on restart.
           if (stream !== this._stream) return;
           if (bytes !== null) {
             this._handleTelemetryData(bytes);
@@ -1090,7 +812,10 @@ export default class SparklineMonitorExtension extends Extension {
   _sendCommand(line) {
     if (!this._writeStream) return;
     try {
-      this._writeStream.write_all(new TextEncoder().encode(line + "\n"), null);
+      this._writeStream.write_all(
+        new TextEncoder().encode(line + "\n"),
+        null,
+      );
       this._writeStream.flush(null);
     } catch (_) {}
   }
@@ -1129,17 +854,21 @@ export default class SparklineMonitorExtension extends Extension {
         "org.freedesktop.login1.Manager",
         null,
       );
-      this._sleepId = this._loginProxy.connectSignal("PrepareForSleep", (_p, _s, params) => {
-        const preparing = Array.isArray(params) && params[0];
-        if (!preparing) this._afterSuspend();
-      });
+      this._sleepId = this._loginProxy.connectSignal(
+        "PrepareForSleep",
+        (_p, _s, params) => {
+          const preparing = Array.isArray(params) && params[0];
+          if (!preparing) this._afterSuspend();
+        },
+      );
     } catch (e) {
-      console.warn(`[${this.metadata.name}] No logind listener available: ${e.message}`);
+      console.warn(
+        `[${this.metadata.name}] No logind listener available: ${e.message}`,
+      );
     }
   }
 
   _afterSuspend() {
-    // Re-detect GPUs/sensors that the kernel may have re-enumerated on wake.
     if (this._disabling) return;
     this._sendCommand("RESET");
   }
@@ -1150,7 +879,10 @@ export default class SparklineMonitorExtension extends Extension {
     try {
       import("resource:///org/gnome/shell/misc/extensionUtils.js")
         .then(({ openPrefs }) => openPrefs(this.uuid))
-        .catch((e) => console.error(`[${this.metadata.name}] openPrefs failed: ${e.message}`));
+        .catch(
+          (e) =>
+            console.error(`[${this.metadata.name}] openPrefs failed: ${e.message}`),
+        );
     } catch (e) {
       console.error(`[${this.metadata.name}] openPrefs failed: ${e.message}`);
     }
@@ -1177,8 +909,8 @@ export default class SparklineMonitorExtension extends Extension {
     heading.add_css_class("title-1");
     const subheading = new Gtk.Label({
       label:
-        "System monitor powered by a native Rust telemetry daemon" +
-        (settings ? "" : " (schema not found — running defaults)"),
+        "Liquid Glass system monitor powered by a native Rust telemetry daemon" +
+        (settings ? "" : " (schema not found \u2014 running defaults)"),
       halign: Gtk.Align.START,
       xalign: 0,
     });
@@ -1197,7 +929,8 @@ export default class SparklineMonitorExtension extends Extension {
         xalign: 0,
       });
       const sw = new Gtk.Switch();
-      if (settings) settings.bind(key, sw, "active", Gio.SettingsBindFlags.DEFAULT);
+      if (settings)
+        settings.bind(key, sw, "active", Gio.SettingsBindFlags.DEFAULT);
       row.append(label);
       row.append(sw);
       box.append(row);
@@ -1217,59 +950,59 @@ export default class SparklineMonitorExtension extends Extension {
         step_increment: step,
       });
       const spin = new Gtk.SpinButton({ adjustment: adj });
-      if (settings) settings.bind(key, spin, "value", Gio.SettingsBindFlags.DEFAULT);
+      if (settings)
+        settings.bind(key, spin, "value", Gio.SettingsBindFlags.DEFAULT);
       row.append(label);
       row.append(spin);
       box.append(row);
     };
 
-    const group = new Gtk.Label({
-      label: "Behavior",
+    // --- General ---
+    const generalGroup = new Gtk.Label({
+      label: "General",
       halign: Gtk.Align.START,
       xalign: 0,
       margin_top: 8,
     });
-    group.add_css_class("heading");
-    box.append(group);
+    generalGroup.add_css_class("heading");
+    box.append(generalGroup);
 
     addSpinRow("Poll interval (ms)", "poll-interval", 200, 10000, 100);
-    addSwitchRow("Animate popover", "animate-popover");
     addSwitchRow("Pause telemetry while locked", "pause-away");
     addSwitchRow("Compact mode (status dot)", "compact-mode");
+
+    // --- Appearance ---
+    const appearGroup = new Gtk.Label({
+      label: "Appearance",
+      halign: Gtk.Align.START,
+      xalign: 0,
+      margin_top: 12,
+    });
+    appearGroup.add_css_class("heading");
+    box.append(appearGroup);
+
+    addSwitchRow("Animate popover", "animate-popover");
     addSwitchRow("Monochrome palette", "mono-palette");
 
-    const metricsGroup = new Gtk.Label({
-      label: "Visible metrics",
+    // --- Visible widgets ---
+    const widgetsGroup = new Gtk.Label({
+      label: "Widgets",
       halign: Gtk.Align.START,
       xalign: 0,
       margin_top: 12,
     });
-    metricsGroup.add_css_class("heading");
-    box.append(metricsGroup);
+    widgetsGroup.add_css_class("heading");
+    box.append(widgetsGroup);
 
-    addSwitchRow("CPU (panel + card)", "show-cpu");
-    addSwitchRow("RAM (panel + card)", "show-ram");
-    addSwitchRow("Cooling fans (panel + card)", "show-fan");
-    addSwitchRow("CPU temperature (in CPU row)", "show-cpu-temp");
-    addSwitchRow("History overview (card)", "show-history");
-    addSwitchRow("GPU (card)", "show-gpu");
-    addSwitchRow("Network (card)", "show-network");
-    addSwitchRow("Disk I/O (card)", "show-disk");
-    addSwitchRow("Top processes (card)", "show-processes");
-
-    const alertsGroup = new Gtk.Label({
-      label: "Alerts",
-      halign: Gtk.Align.START,
-      xalign: 0,
-      margin_top: 12,
-    });
-    alertsGroup.add_css_class("heading");
-    box.append(alertsGroup);
-
-    addSwitchRow("Alert on sustained high load", "notify-load");
-    addSpinRow("CPU alert threshold (%)", "cpu-alert", 20, 100, 1);
-    addSpinRow("GPU util alert threshold (%)", "gpu-alert", 20, 100, 1);
-    addSpinRow("Temperature alert (°C, CPU/GPU)", "temp-alert", 30, 120, 1);
+    addSwitchRow("CPU", "show-cpu");
+    addSwitchRow("CPU temperature", "show-cpu-temp");
+    addSwitchRow("Memory", "show-ram");
+    addSwitchRow("GPU", "show-gpu");
+    addSwitchRow("Cooling fans", "show-fan");
+    addSwitchRow("Network", "show-network");
+    addSwitchRow("Disk I/O", "show-disk");
+    addSwitchRow("History overview", "show-history");
+    addSwitchRow("Top processes", "show-processes");
 
     return box;
   }
@@ -1347,18 +1080,9 @@ export default class SparklineMonitorExtension extends Extension {
     this._cpuGauge = null;
     this._ramGauge = null;
     this._fanGauge = null;
-    this._cpuSpark = null;
-    this._gpuSpark = null;
-    this._historySpark = null;
-    this._netRxSpark = null;
-    this._netTxSpark = null;
-    this._diskReadSpark = null;
-    this._diskWriteSpark = null;
     this._coreBars = [];
-    this._fanRows = [];
-    this._procRows = [];
-    this._cpuHistory = [];
     this._pauseSwitch = null;
     this._compactSwitch = null;
+    this._registry = null;
   }
 }

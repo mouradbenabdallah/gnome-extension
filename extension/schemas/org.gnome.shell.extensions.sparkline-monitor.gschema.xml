@@ -26,7 +26,7 @@
         <key name="pause-away" type="b">
             <default>true</default>
             <summary>Pause while locked</summary>
-            <description>Pause telemetry sampling while the machine is locked or idle, saving battery and CPU.</description>
+            <description>Pause telemetry sampling while the machine is locked or idle, saving power and CPU.</description>
         </key>
         <key name="show-cpu" type="b">
             <default>true</default>
@@ -73,28 +73,22 @@
             <summary>Show top processes</summary>
             <description>Show the top CPU-consuming processes in the popover.</description>
         </key>
-        <key name="notify-load" type="b">
-            <default>true</default>
-            <summary>Load alerts</summary>
-            <description>Notify when CPU or GPU are sustained above the alert thresholds.</description>
+        <key name="glass-opacity" type="d">
+            <range min="0.3" max="1.0"/>
+            <default>0.88</default>
+            <summary>Glass opacity</summary>
+            <description>Opacity of the Liquid Glass popover background.</description>
         </key>
-        <key name="cpu-alert" type="d">
-            <range min="20.0" max="100.0"/>
-            <default>85.0</default>
-            <summary>CPU alert threshold (%)</summary>
-            <description>Alert when average CPU load stays above this percentage.</description>
+        <key name="widget-order" type="s">
+            <default>''</default>
+            <summary>Widget order</summary>
+            <description>Comma-separated list of widget ids defining their display order.</description>
         </key>
-        <key name="gpu-alert" type="d">
-            <range min="20.0" max="100.0"/>
-            <default>90.0</default>
-            <summary>GPU util alert threshold (%)</summary>
-            <description>Alert when GPU utilization stays above this percentage.</description>
-        </key>
-        <key name="temp-alert" type="d">
-            <range min="30.0" max="120.0"/>
-            <default>85.0</default>
-            <summary>GPU temperature alert (°C)</summary>
-            <description>Alert when GPU temperature stays above this value.</description>
+        <key name="glass-corner-radius" type="i">
+            <range min="8" max="32"/>
+            <default>20</default>
+            <summary>Corner radius</summary>
+            <summary>Corner radius of the Liquid Glass popover in pixels.</summary>
         </key>
     </schema>
 </schemalist>

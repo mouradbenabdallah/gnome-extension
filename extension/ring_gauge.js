@@ -76,7 +76,7 @@ class RingGauge extends St.DrawingArea {
             }
             this._animSource = GLib.timeout_add(
                 GLib.PRIORITY_DEFAULT,
-                32,
+                50,
                 () => this._animateStep()
             );
         }
@@ -86,14 +86,14 @@ class RingGauge extends St.DrawingArea {
         if (this._fanSource)
             return;
 
-        this._fanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
+        this._fanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 66, () => {
             const pct = this._value / 100.0;
             if (pct <= 0.001) {
                 this._stopFanSpin();
                 return GLib.SOURCE_REMOVE;
             }
             // Gentle idle rotation that speeds up with fan %, ~1-2 rev/s
-            const step = 0.05 + pct * 0.38;
+            const step = 0.1 + pct * 0.76;
             this._fanAngle = (this._fanAngle + step) % (Math.PI * 2);
             this.queue_repaint();
             return GLib.SOURCE_CONTINUE;
@@ -115,7 +115,7 @@ class RingGauge extends St.DrawingArea {
             this.queue_repaint();
             return GLib.SOURCE_REMOVE;
         }
-        this._value += diff * 0.18;
+        this._value += diff * 0.25;
         this.queue_repaint();
         return GLib.SOURCE_CONTINUE;
     }

@@ -1,5 +1,6 @@
 import GObject from 'gi://GObject';
 import St from 'gi://St';
+import GLib from 'gi://GLib';
 import cairo from 'cairo';
 
 export const Sparkline = GObject.registerClass(
@@ -28,6 +29,7 @@ class Sparkline extends St.DrawingArea {
         this._warnColor = { r: 0.96, g: 0.62, b: 0.07 }; // #f59e0b
         this._alertColor = { r: 0.94, g: 0.27, b: 0.27 }; // #ef4444
         this._peak = 0.0; // Auto-scaling peak so raw units (KB/s) graph nicely
+        this._repaintPending = false;
     }
 
     _parseHexColor(hex) {
@@ -49,7 +51,7 @@ class Sparkline extends St.DrawingArea {
         this._history.push(v);
         // Slowly track the peak so short spikes don't crush the baseline.
         this._peak = Math.max(v, this._peak * 0.97);
-        this.queue_repaint();
+        this._scheduleRepaint();
     }
 
     /** Replaces the whole history window with `values` (e.g. a 30s overview). */
@@ -61,7 +63,17 @@ class Sparkline extends St.DrawingArea {
             this._history = new Array(this._maxPoints - list.length).fill(0.0).concat(list);
         }
         this._peak = Math.max(...this._history, this._peak * 0.97, 1.0);
-        this.queue_repaint();
+        this._scheduleRepaint();
+    }
+
+    _scheduleRepaint() {
+        if (this._repaintPending) return;
+        this._repaintPending = true;
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            this._repaintPending = false;
+            this.queue_repaint();
+            return GLib.SOURCE_REMOVE;
+        });
     }
 
     vfunc_repaint() {
