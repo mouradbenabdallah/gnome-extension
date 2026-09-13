@@ -2,7 +2,7 @@
 
 A macOS-style, high-performance system monitor extension for GNOME Shell
 (GNOME 45 – 50). A native Rust daemon feeds a jet-black **vertical** top-panel
-capsule with animated circular ring gauges, and a frosted macOS-style popover
+capsule with animated circular ring gauges, and a Liquid Glass macOS-style popover
 card with Activity-Monitor-style live graphs.
 
 Features:
@@ -18,10 +18,9 @@ Features:
 - **Top processes** — top 3 CPU consumers
 - **History overview** — ~30 s Activity-Monitor-style CPU graph
 - **Compact mode** — collapse the panel to a single status dot colored by the worst metric
-- **Load alerts** — OSD notification + in-card banner, with *recovery* notifications when load clears
 - **Pause while locked** — telemetry pauses when the screen locks (saves power/CPU)
 - **Suspend-safe** — re-initializes GPU/temp sensors after wake
-- **Popover animation** — springy scale/fade open & close
+- **Popover animation** — calm fade-and-scale open & close (no bounce or overshoot)
 - **Menu** — Pause telemetry, Compact mode, Reinitialize sensors, Settings
 - **Preferences** — poll interval, animations, palette, visible metrics & alert thresholds
 
@@ -69,7 +68,18 @@ gnome-sparkline-monitor/
 │   ├── sparkline.js           # Auto-scaling sparkline history graphs
 │   ├── schemas/               # GSettings schema for the preferences
 │   ├── data/                  # systemd user unit file
-│   └── stylesheet.css         # macOS frosted-dark styling
+│   ├── widgets/               # Per-metric popover widgets
+│   │   ├── cpu-widget.js      #   CPU arc + per-core grid
+│   │   ├── memory-widget.js   #   RAM arc + used/total
+│   │   ├── gpu-widget.js      #   GPU util/temp + history
+│   │   ├── network-widget.js  #   RX/TX sparklines
+│   │   ├── disk-widget.js     #   Read/write throughput
+│   │   ├── fan-widget.js      #   Fan RPM / % breakdown
+│   │   ├── processes-widget.js#   Top CPU consumers
+│   │   ├── history-widget.js  #   ~30 s CPU history graph
+│   │   ├── metric-card.js     #   Shared widget skeleton
+│   │   └── widget-registry.js #   Registers widgets + settings order
+│   └── stylesheet.css         # macOS glass-dark styling
 ├── install.sh                 # One-step build, schema & service install
 └── Makefile                   # build / test / install / dist
 ```

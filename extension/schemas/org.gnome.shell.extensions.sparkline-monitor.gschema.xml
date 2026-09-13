@@ -11,7 +11,7 @@
         <key name="animate-popover" type="b">
             <default>true</default>
             <summary>Animate popover</summary>
-            <description>Play a Dynamic-Island morph animation when the popover opens and closes.</description>
+            <description>Play a calm fade-and-scale animation when the popover opens and closes.</description>
         </key>
         <key name="compact-mode" type="b">
             <default>false</default>

@@ -1,7 +1,7 @@
 {
   "uuid": "sparkline-monitor@local",
   "name": "Codenotch Monitor",
-  "description": "Liquid Glass macOS-inspired system monitor: vertical stack of ring gauges for CPU, RAM and fans (auto-detects 1+ fans), plus frosted-glass popover with Activity-Monitor graphs for per-core CPU, CPU temp, GPU, network, disk, history and top processes, powered by a native Rust daemon.",
+  "description": "Liquid Glass macOS-inspired system monitor: vertical stack of ring gauges for CPU, RAM and fans (auto-detects 1+ fans), plus a Liquid Glass popover with Activity-Monitor graphs for per-core CPU, CPU temp, GPU, network, disk, history and top processes, powered by a native Rust daemon.",
   "shell-version": [
     "45",
     "46",
@@ -10,6 +10,6 @@
     "49",
     "50"
   ],
-  "url": "https://github.com/local/gnome-sparkline-monitor",
+  "url": "https://github.com/mouradbenabdallah/gnome-extension",
   "version": 6
 }

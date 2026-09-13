@@ -25,13 +25,13 @@ const SCHEMA_ID = "org.gnome.shell.extensions.sparkline-monitor";
 const SERVICE_SOCKET = "codenotch-monitor.service.sock";
 const CHILD_SOCKET = "codenotch-monitor.child.sock";
 
-// Dynamic-Island morph timings. Open overshoots with EASE_OUT_BACK and lets
-// the inner content cross-fade in only after the shape is mostly expanded.
-const MORPH_OPEN_MS = 420;
-const MORPH_CLOSE_MS = 260;
-const MORPH_FADE_START = 0.42;
-const CAPSULE_RADIUS = 15;
-const CARD_RADIUS = 24;
+// Calm popover animation timings. The open fades in with a subtle scale +
+// position settle (EASE_OUT_CUBIC, no bounce or overshoot); the close is a
+// faster ease-in reverse.
+const POPOVER_OPEN_MS = 200;
+const POPOVER_CLOSE_MS = 130;
+const POPOVER_OPEN_SCALE = 0.97;
+const POPOVER_OPEN_OFFSET = 10;
 
 export default class SparklineMonitorExtension extends Extension {
   enable() {
@@ -54,10 +54,8 @@ export default class SparklineMonitorExtension extends Extension {
     this._latestData = null;
     this._telemetryCounter = 0;
 
-    // Dynamic-Island morph state
-    this._morphTimers = [];
-    this._morphActive = false;
-    this._morphRadius = null;
+    // Popover animation state
+    this._popoverTimer = 0;
 
     this._loadSettings();
     this._setupWidgetRegistry();
@@ -507,7 +505,7 @@ export default class SparklineMonitorExtension extends Extension {
     widget._lastBandClass = cls;
   }
 
-  // ----------------------------- Dynamic-Island Morph -----------------------------
+  // ----------------------------- Popover Animation -----------------------------
 
   _onMenuStateChanged(menu, open) {
     // During teardown let the stock popup tween run to completion instead of
@@ -522,9 +520,9 @@ export default class SparklineMonitorExtension extends Extension {
       this._resumeUiUpdates();
 
       if (animate) {
-        this._morphOpen();
+        this._animateOpen();
       } else {
-        this._cancelMorph();
+        this._cancelPopoverAnimation();
         const bp = menu.actor;
         bp.remove_all_transitions();
         bp.opacity = 255;
@@ -541,69 +539,30 @@ export default class SparklineMonitorExtension extends Extension {
       this._freezeUi();
 
       if (animate) {
-        this._morphClose();
+        this._animateClose();
       } else {
-        this._cancelMorph();
+        this._cancelPopoverAnimation();
       }
     }
   }
 
-  _cancelMorph() {
-    for (const t of this._morphTimers) {
-      if (t) GLib.source_remove(t);
+  _cancelPopoverAnimation() {
+    if (this._popoverTimer) {
+      GLib.source_remove(this._popoverTimer);
+      this._popoverTimer = 0;
     }
-    this._morphTimers = [];
-    this._morphActive = false;
-    this._morphRadius = null;
-    if (this._glassMenuBox) {
-      this._glassMenuBox.remove_all_transitions();
-      this._glassMenuBox.width = -1;
-      this._glassMenuBox.height = -1;
-    }
-    this._setGlassStyle();
+    const bp = this._indicator?.menu?.actor;
+    if (bp) bp.remove_all_transitions();
   }
 
-  /** Start geometry: the top-bar capsule the island morphs out of. */
-  _capsuleMorphSize() {
-    const box = this._notchBox;
-    if (box && box.width > 0 && box.height > 0) {
-      return { w: Math.max(18, box.width), h: Math.max(14, box.height) };
-    }
-    return { w: 96, h: 34 };
-  }
-
-  /** Final geometry: the popover's natural (CSS/layout) size. */
-  _preferredCardSize() {
-    const bin = this._glassMenuBox;
-    try {
-      const [, natW] = bin.get_preferred_width(-1);
-      const [, natH] = bin.get_preferred_height(-1);
-      return {
-        w: Math.max(natW, 320),
-        h: Math.max(natH, 300),
-      };
-    } catch (_) {
-      return { w: 430, h: 480 };
-    }
-  }
-
-  /**
-   * Inline glass style. While a morph is active we neutralise the CSS
-   * min-width/min-height so the fixed-size width/height tween is the
-   * authority, and we expose a border-radius that is animated in a few
-   * cheap discrete steps alongside the shape change.
-   */
+  /** Inline glass style. The translucency is baked into CSS, not actor opacity. */
   _setGlassStyle() {
     if (!this._glassMenuBox) return;
     const alpha = Math.max(
       0.3,
       Math.min(1.0, this._getDouble("glass-opacity", 0.88)),
     );
-    let style = `background-color: rgba(16, 16, 22, ${alpha})`;
-    if (this._morphRadius) style += `; border-radius: ${this._morphRadius}px`;
-    if (this._morphActive)
-      style += `; min-width: 0px; min-height: 0px`;
-    this._glassMenuBox.style = style;
+    this._glassMenuBox.style = `background-color: rgba(16, 16, 22, ${alpha})`;
     this._glassMenuBox.opacity = 255;
   }
 
@@ -621,13 +580,62 @@ export default class SparklineMonitorExtension extends Extension {
     }
   }
 
-  _morphOpen() {
+  /** Calm open: fade the popover in with a subtle scale + position settle. */
+  _animateOpen() {
     const bp = this._indicator.menu.actor;
-    const bin = this._glassMenuBox;
-    this._cancelMorph();
+    this._cancelPopoverAnimation();
 
-    // Suppress the stock popup tween so the island morph is the only motion:
-    // an opaque glass shape, already anchored where the capsule sits.
+    // Suppress the stock popup tween so the calm fade is the only motion.
+    bp.remove_all_transitions();
+    bp.set_pivot_point(0.5, 0);
+    bp.opacity = 0;
+    bp.scale_x = POPOVER_OPEN_SCALE;
+    bp.scale_y = POPOVER_OPEN_SCALE;
+    bp.translation_x = 0;
+    bp.translation_y = POPOVER_OPEN_OFFSET;
+    bp._muteKeys = false;
+    bp._muteInput = false;
+
+    // The stock popup only shows its actor after emitting open-state-changed,
+    // so it is not mapped yet and tweens on unmapped actors complete
+    // instantly. Defer to the next main-loop tick so the fade actually plays.
+    this._popoverTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 0, () => {
+      this._popoverTimer = 0;
+      if (this._disabling || !this._menuOpen) return GLib.SOURCE_REMOVE;
+      if (!bp.mapped) {
+        bp.opacity = 255;
+        bp.scale_x = 1;
+        bp.scale_y = 1;
+        bp.translation_y = 0;
+        return GLib.SOURCE_REMOVE;
+      }
+      bp.remove_all_transitions();
+      bp.ease_property("opacity", 255, {
+        duration: POPOVER_OPEN_MS,
+        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+      });
+      bp.ease_property("scale_x", 1, {
+        duration: POPOVER_OPEN_MS,
+        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+      });
+      bp.ease_property("scale_y", 1, {
+        duration: POPOVER_OPEN_MS,
+        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+      });
+      bp.ease_property("translation_y", 0, {
+        duration: POPOVER_OPEN_MS,
+        mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
+      });
+      return GLib.SOURCE_REMOVE;
+    });
+  }
+
+  /** Calm close: quick ease-in fade out, the reverse of the open. */
+  _animateClose() {
+    const bp = this._indicator.menu.actor;
+    this._cancelPopoverAnimation();
+
+    // Cancel the stock hide tween: we own the close fade below.
     bp.remove_all_transitions();
     bp.set_pivot_point(0.5, 0);
     bp.opacity = 255;
@@ -635,133 +643,42 @@ export default class SparklineMonitorExtension extends Extension {
     bp.scale_y = 1;
     bp.translation_x = 0;
     bp.translation_y = 0;
-    bp._muteKeys = false;
-    bp._muteInput = false;
 
-    const start = this._capsuleMorphSize();
-    const fin = this._preferredCardSize();
-
-    this._morphActive = true;
-    this._morphRadius = CAPSULE_RADIUS;
-    this._setGlassStyle();
-    this._setChildrenFade(0, 0);
-
-    bin.remove_all_transitions();
-    bin.width = start.w;
-    bin.height = start.h;
-
-    // Real geometry morph: width, height and corner radius change together
-    // from the capsule's proportions toward the full popover size, with an
-    // overshooting spring curve (EASE_OUT_BACK).
-    bin.ease_property("width", fin.w, {
-      duration: MORPH_OPEN_MS,
-      mode: Clutter.AnimationMode.EASE_OUT_BACK,
+    bp.ease_property("opacity", 0, {
+      duration: POPOVER_CLOSE_MS,
+      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+      onComplete: () => this._finishClose(bp),
     });
-    bin.ease_property("height", fin.h, {
-      duration: MORPH_OPEN_MS,
-      mode: Clutter.AnimationMode.EASE_OUT_BACK,
+    bp.ease_property("scale_x", POPOVER_OPEN_SCALE, {
+      duration: POPOVER_CLOSE_MS,
+      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
     });
-
-    // Content reveals only after the morph is ~40% complete so the shape
-    // change reads first; radius steps up in two cheap CSS cherry picks.
-    const fadeAt = Math.round(MORPH_OPEN_MS * MORPH_FADE_START);
-    this._morphTimers.push(
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, fadeAt, () => {
-        if (!this._morphActive) return GLib.SOURCE_REMOVE;
-        this._morphRadius = 20;
-        this._setGlassStyle();
-        this._setChildrenFade(
-          255,
-          Math.max(180, MORPH_OPEN_MS - fadeAt - 40),
-          Clutter.AnimationMode.EASE_OUT_CUBIC,
-        );
-        return GLib.SOURCE_REMOVE;
-      }),
-    );
-    this._morphTimers.push(
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(MORPH_OPEN_MS * 0.85), () => {
-        if (!this._morphActive) return GLib.SOURCE_REMOVE;
-        this._morphRadius = CARD_RADIUS;
-        this._setGlassStyle();
-        return GLib.SOURCE_REMOVE;
-      }),
-    );
-    this._morphTimers.push(
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, MORPH_OPEN_MS + 80, () => {
-        this._morphActive = false;
-        this._morphRadius = null;
-        bin.width = -1;
-        bin.height = -1;
-        this._morphTimers = [];
-        this._setGlassStyle();
-        return GLib.SOURCE_REMOVE;
-      }),
-    );
+    bp.ease_property("scale_y", POPOVER_OPEN_SCALE, {
+      duration: POPOVER_CLOSE_MS,
+      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+    });
+    bp.ease_property("translation_y", POPOVER_OPEN_OFFSET, {
+      duration: POPOVER_CLOSE_MS,
+      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+    });
   }
 
-  _morphClose() {
-    const bp = this._indicator.menu.actor;
-    const bin = this._glassMenuBox;
-    this._cancelMorph();
-
-    // Cancel the stock hide tween: we own the reverse morph below.
+  _finishClose(bp) {
+    if (this._disabling || this._menuOpen) return;
     bp.remove_all_transitions();
-
-    const start = this._capsuleMorphSize();
-
-    this._morphActive = true;
-    this._morphRadius = 20;
-    this._setGlassStyle();
-    this._setChildrenFade(0, 110, Clutter.AnimationMode.EASE_IN_CUBIC);
-
-    bin.remove_all_transitions();
-    // Reverse is faster and ease-in, collapsing back into the capsule.
-    bin.ease_property("width", start.w, {
-      duration: MORPH_CLOSE_MS,
-      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-    });
-    bin.ease_property("height", start.h, {
-      duration: MORPH_CLOSE_MS,
-      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-    });
-
-    this._morphTimers.push(
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(MORPH_CLOSE_MS * 0.4), () => {
-        if (!this._morphActive) return GLib.SOURCE_REMOVE;
-        this._morphRadius = CAPSULE_RADIUS;
-        this._setGlassStyle();
-        return GLib.SOURCE_REMOVE;
-      }),
-    );
-    this._morphTimers.push(
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, MORPH_CLOSE_MS + 60, () => {
-        this._morphActive = false;
-        this._morphRadius = null;
-        bin.remove_all_transitions();
-        bin.width = -1;
-        bin.height = -1;
-        this._morphTimers = [];
-        this._setGlassStyle();
-        this._setChildrenFade(255, 0);
-        // Restore the stock BoxPointer closed state so the popup stays fully
-        // hidden and is clean for its next open.
-        if (bp) {
-          bp.remove_all_transitions();
-          bp.opacity = 0;
-          bp.scale_x = 1;
-          bp.scale_y = 1;
-          bp.translation_x = 0;
-          bp.translation_y = 0;
-          bp.hide();
-          bp._muteKeys = true;
-          bp._muteInput = true;
-        }
-        try {
-          this._indicator?.menu?.emit("menu-closed");
-        } catch (_) {}
-        return GLib.SOURCE_REMOVE;
-      }),
-    );
+    bp.opacity = 0;
+    bp.scale_x = POPOVER_OPEN_SCALE;
+    bp.scale_y = POPOVER_OPEN_SCALE;
+    bp.translation_x = 0;
+    bp.translation_y = POPOVER_OPEN_OFFSET;
+    bp.hide();
+    // Restore the stock BoxPointer closed state so the popup stays fully
+    // hidden and is clean for its next open.
+    bp._muteKeys = true;
+    bp._muteInput = true;
+    try {
+      this._indicator?.menu?.emit("menu-closed");
+    } catch (_) {}
   }
 
   _resumeUiUpdates() {
@@ -1291,7 +1208,7 @@ export default class SparklineMonitorExtension extends Extension {
   disable() {
     this._disabling = true;
 
-    this._cancelMorph();
+    this._cancelPopoverAnimation();
 
     if (this._lockWatchdog) {
       GLib.source_remove(this._lockWatchdog);
