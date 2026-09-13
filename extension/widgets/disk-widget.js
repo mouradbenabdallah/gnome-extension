@@ -4,9 +4,9 @@ import { Sparkline } from "../sparkline.js";
 export function createDiskWidget() {
   const card = new MetricCard({ id: "disk", title: "Disk I/O" });
 
-  const readSpark = new Sparkline({ color: "#00ff88", width: 80, height: 20 });
+  const readSpark = new Sparkline({ color: "#67C2A0", width: 80, height: 20 });
   const writeSpark = new Sparkline({
-    color: "#ffb000",
+    color: "#E2B06E",
     width: 80,
     height: 20,
   });

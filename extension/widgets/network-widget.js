@@ -4,8 +4,8 @@ import { Sparkline } from "../sparkline.js";
 export function createNetworkWidget() {
   const card = new MetricCard({ id: "network", title: "Network" });
 
-  const rxSpark = new Sparkline({ color: "#00d2ff", width: 80, height: 20 });
-  const txSpark = new Sparkline({ color: "#ff7ad9", width: 80, height: 20 });
+  const rxSpark = new Sparkline({ color: "#4FC3E8", width: 80, height: 20 });
+  const txSpark = new Sparkline({ color: "#D98CB0", width: 80, height: 20 });
   card.addGraphPair(rxSpark, txSpark);
 
   function fmtRate(kbs) {

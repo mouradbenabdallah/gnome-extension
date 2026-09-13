@@ -26,8 +26,8 @@ class Sparkline extends St.DrawingArea {
         this._maxPoints = maxPoints;
         this._history = new Array(maxPoints).fill(0.0);
         this._color = this._parseHexColor(color);
-        this._warnColor = { r: 0.96, g: 0.62, b: 0.07 }; // #f59e0b
-        this._alertColor = { r: 0.94, g: 0.27, b: 0.27 }; // #ef4444
+        this._warnColor = { r: 0.90, g: 0.70, b: 0.35 }; // muted amber
+        this._alertColor = { r: 0.88, g: 0.40, b: 0.37 }; // muted red
         this._peak = 0.0; // Auto-scaling peak so raw units (KB/s) graph nicely
         this._repaintPending = false;
         this._enabled = true;   // When false, samples are buffered but not drawn
@@ -162,11 +162,11 @@ class Sparkline extends St.DrawingArea {
         cr.lineTo(points[len - 1].x, h);
         cr.closePath();
 
-        cr.setSourceRGBA(activeColor.r, activeColor.g, activeColor.b, 0.22);
+        cr.setSourceRGBA(activeColor.r, activeColor.g, activeColor.b, 0.16);
         cr.fill();
 
         // Draw antialiased sparkline stroke
-        cr.setLineWidth(1.2);
+        cr.setLineWidth(1.1);
         cr.setLineCap(cairo.LineCap.ROUND);
         cr.setLineJoin(cairo.LineJoin.ROUND);
 

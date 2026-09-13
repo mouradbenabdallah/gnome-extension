@@ -7,7 +7,7 @@ export function createGpuWidget() {
   const card = new MetricCard({ id: "gpu", title: "GPU" });
   card.setSubtitle("Detecting\u2026");
 
-  const spark = new Sparkline({ color: "#00ff88", width: 170, height: 20 });
+  const spark = new Sparkline({ color: "#58C48F", width: 170, height: 20 });
   card.addGraph(spark);
 
   return {

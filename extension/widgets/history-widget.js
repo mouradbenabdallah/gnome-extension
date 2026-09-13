@@ -8,7 +8,7 @@ export function createHistoryWidget() {
     xExpand: false,
   });
 
-  const spark = new Sparkline({ color: "#5bc0ff", width: 170, height: 24 });
+  const spark = new Sparkline({ color: "#5FA8E0", width: 170, height: 24 });
   card.addGraph(spark);
 
   return {

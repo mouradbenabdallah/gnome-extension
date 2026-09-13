@@ -6,7 +6,7 @@ import { Sparkline } from "../sparkline.js";
 export function createCpuWidget() {
   const card = new MetricCard({ id: "cpu", title: "CPU" });
 
-  const spark = new Sparkline({ color: "#5bc0ff", width: 170, height: 20 });
+  const spark = new Sparkline({ color: "#5FA8E0", width: 170, height: 20 });
   card.addGraph(spark);
 
   return {

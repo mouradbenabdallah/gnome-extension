@@ -1,4 +1,6 @@
-/* Codenotch Monitor — Liquid Glass Design System */
+/* Codenotch Monitor — Liquid Glass Design System
+   One cohesive glass surface. Expensive treatment is reserved for the
+   main panel; children are flat and cheap. */
 
 /* ============================
    TOP PANEL CAPSULE
@@ -11,25 +13,27 @@
 
 .codenotch-notch-box {
     background-color: rgba(14, 14, 20, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.10);
     border-radius: 14px;
     padding: 3px 9px;
     spacing: 2px;
     margin: 2px 4px;
     box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.06),
-        0 1px 5px rgba(0, 0, 0, 0.30);
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 1px 4px rgba(0, 0, 0, 0.28);
 }
 
 .codenotch-notch-box:hover {
-    border-color: rgba(255, 255, 255, 0.22);
-    background-color: rgba(18, 18, 24, 0.82);
+    border-color: rgba(255, 255, 255, 0.18);
+    background-color: rgba(18, 18, 24, 0.80);
 }
 
 .codenotch-metric-cell {
     spacing: 5px;
     padding: 2px 5px;
     border-radius: 9px;
+    background-color: transparent;
+    transition: background-color 120ms ease;
 }
 
 .codenotch-metric-cell:hover {
@@ -48,7 +52,7 @@
 
 .codenotch-value-sublabel {
     font-size: 6.5pt;
-    color: rgba(255, 255, 255, 0.48);
+    color: rgba(255, 255, 255, 0.45);
     min-height: 8px;
 }
 
@@ -58,23 +62,57 @@
 
 .codenotch-menu-boxpointer {
     -arrow-background-color: rgba(18, 18, 24, 0.90);
-    -arrow-border-color: rgba(255, 255, 255, 0.10);
+    -arrow-border-color: rgba(255, 255, 255, 0.08);
     -arrow-border-radius: 12px;
     -arrow-base: 18px;
     -arrow-rise: 8px;
 }
 
 .codenotch-card-menu {
-    border-radius: 20px;
-    background-color: rgba(18, 18, 26, 0.86) !important;
-    border: 1px solid rgba(255, 255, 255, 0.11) !important;
-    padding: 14px 16px !important;
-    min-width: 420px;
+    border-radius: 24px;
+    background-color: rgba(16, 16, 22, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    padding: 16px;
+    min-width: 430px;
     max-width: 540px;
     box-shadow:
-        0 12px 28px rgba(0, 0, 0, 0.48),
-        0 2px 8px rgba(0, 0, 0, 0.30),
-        inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+        0 16px 40px rgba(0, 0, 0, 0.45),
+        0 2px 8px rgba(0, 0, 0, 0.28),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+/* Clean up the default popup item chrome inside the glass surface */
+.codenotch-card-menu .popup-menu-item,
+.codenotch-card-menu .popup-switch-menu-item {
+    background-color: transparent;
+    padding: 7px 8px;
+    font-size: 9pt;
+    border-radius: 8px;
+    transition: background-color 80ms ease;
+}
+
+.codenotch-card-menu .popup-menu-item:hover,
+.codenotch-card-menu .popup-switch-menu-item:hover {
+    background-color: rgba(255, 255, 255, 0.045);
+}
+
+/* Structural menu wrappers (header, grid, cores) should be invisible chrome */
+.codenotch-card-menu .codenotch-structural-item,
+.codenotch-card-menu .codenotch-structural-item:hover,
+.codenotch-card-menu .codenotch-structural-item:focus,
+.codenotch-card-menu .codenotch-structural-item:active,
+.codenotch-card-menu .codenotch-structural-item:selected {
+    padding: 0;
+    margin: 0;
+    background-color: transparent;
+}
+
+.codenotch-card-menu .popup-switch-menu-item-switch {
+    border-radius: 10px;
+}
+
+.codenotch-controls-start {
+    margin-top: 8px;
 }
 
 /* ============================
@@ -82,20 +120,26 @@
    ============================ */
 
 .codenotch-glass-header {
-    spacing: 3px;
-    margin-bottom: 2px;
+    spacing: 2px;
+    margin: 4px 4px 8px 4px;
 }
 
 .codenotch-card-header {
-    font-size: 11pt;
-    font-weight: 700;
+    font-size: 12.5pt;
+    font-weight: 600;
     color: #ffffff;
+    letter-spacing: 0.2px;
+}
+
+.codenotch-glass-header .codenotch-card-subtitle {
+    font-size: 8pt;
+    color: rgba(255, 255, 255, 0.38);
     letter-spacing: 0.2px;
 }
 
 .codenotch-card-subtitle {
     font-size: 7.5pt;
-    color: rgba(255, 255, 255, 0.45);
+    color: rgba(255, 255, 255, 0.42);
 }
 
 /* ============================
@@ -103,48 +147,47 @@
    ============================ */
 
 .codenotch-glass-grid {
-    spacing: 10px;
+    spacing: 12px;
     margin: 4px 0 8px 0;
 }
 
 .codenotch-glass-column {
     spacing: 6px;
     flex: 1;
+    flex-basis: 0;
 }
 
 /* ============================
-   GLASS METRIC CARDS
+   METRIC CARDS — integrated surface
    ============================ */
 
 .codenotch-glass-card {
-    background-color: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 11px;
-    padding: 8px 10px;
-    spacing: 3px;
-    transition: background-color 150ms ease;
+    background-color: rgba(255, 255, 255, 0.022);
+    border: 1px solid rgba(255, 255, 255, 0.035);
+    border-radius: 10px;
+    padding: 10px 12px;
+    spacing: 2px;
 }
 
 .codenotch-glass-card:hover {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.09);
+    background-color: rgba(255, 255, 255, 0.04);
 }
 
 .codenotch-card-header-row {
     spacing: 8px;
-    x_expand: true;
+    margin-bottom: 1px;
 }
 
 .codenotch-card-title {
-    font-size: 7.5pt;
+    font-size: 8pt;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.52);
-    x_expand: true;
+    color: rgba(255, 255, 255, 0.42);
+    letter-spacing: 0.3px;
 }
 
 .codenotch-card-value {
-    font-size: 10.5pt;
-    font-weight: 600;
+    font-size: 11.5pt;
+    font-weight: 500;
     color: #ffffff;
 }
 
@@ -159,14 +202,14 @@
 
 .codenotch-card-label {
     font-size: 7.5pt;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.58);
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.45);
 }
 
 .codenotch-card-val {
     font-size: 8.5pt;
-    font-weight: 600;
-    color: #ffffff;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.85);
 }
 
 /* ============================
@@ -176,30 +219,29 @@
 .codenotch-glass-progress-track {
     height: 3px;
     border-radius: 2px;
-    background-color: rgba(255, 255, 255, 0.09);
-    margin: 4px 0 2px 0;
+    background-color: rgba(255, 255, 255, 0.08);
+    margin: 5px 0 3px 0;
 }
 
 .codenotch-glass-progress-fill {
     height: 3px;
     border-radius: 2px;
-    transition: width 160ms ease-out;
 }
 
 .codenotch-fill-ample {
-    background-color: #30D158;
+    background-color: #4CC38A;
 }
 
 .codenotch-fill-watch {
-    background-color: #FFD60A;
+    background-color: #E6C15A;
 }
 
 .codenotch-fill-critical {
-    background-color: #FF9F0A;
+    background-color: #E0964C;
 }
 
 .codenotch-fill-exhausted {
-    background-color: #FF453A;
+    background-color: #E0635B;
 }
 
 /* ============================
@@ -207,30 +249,17 @@
    ============================ */
 
 .codenotch-card-graph-wrap {
-    margin: 2px 0 1px 0;
+    margin: 3px 0 2px 0;
     border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.015);
+    padding: 1px 0;
 }
 
 .codenotch-card-graph-pair {
-    spacing: 8px;
-}
-
-.codenotch-sparkline-wrap {
-    margin: 1px 0 5px 0;
-    border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.015);
-}
-
-.codenotch-sparkline-pair-wrap {
-    margin: 1px 0 5px 0;
-    border-radius: 8px;
-    background-color: rgba(255, 255, 255, 0.015);
-    spacing: 8px;
+    spacing: 10px;
 }
 
 .sparkline-canvas {
-    border-radius: 6px;
+    border-radius: 5px;
 }
 
 /* ============================
@@ -238,20 +267,14 @@
    ============================ */
 
 .codenotch-fansublist {
-    spacing: 2px;
+    spacing: 1px;
+    margin-top: 2px;
 }
 
 .codenotch-fansublist .codenotch-card-row {
-    margin: 1px 0;
-    padding: 2px 6px;
-    border-radius: 6px;
-    background-color: rgba(255, 255, 255, 0.02);
+    margin: 0;
+    padding: 1px 2px;
     spacing: 6px;
-}
-
-.codenotch-fansublist .codenotch-card-val {
-    font-size: 8.5pt;
-    font-weight: 600;
 }
 
 .codenotch-fan-detail-row {
@@ -264,33 +287,33 @@
    ============================ */
 
 .codenotch-cores-section {
-    margin: 2px 0;
+    margin: 6px 4px 2px 4px;
+    spacing: 3px;
 }
 
 .codenotch-core-row {
-    spacing: 4px;
-    margin: 1px 0;
+    spacing: 2px;
+    margin: 2px 0;
 }
 
 .codenotch-core-track {
-    width: 32px;
-    height: 36px;
-    padding: 3px 2px 1px 2px;
-    border-radius: 6px;
-    background-color: rgba(255, 255, 255, 0.05);
+    width: 24px;
+    height: 30px;
+    padding: 2px 1px 1px 1px;
+    border-radius: 5px;
+    background-color: rgba(255, 255, 255, 0.035);
 }
 
 .codenotch-core-fill {
-    width: 28px;
-    border-radius: 2.5px;
-    transition: height 140ms ease-out;
+    width: 20px;
+    border-radius: 2px;
 }
 
 .codenotch-core-num {
-    font-size: 6pt;
-    color: rgba(255, 255, 255, 0.34);
+    font-size: 5.5pt;
+    color: rgba(255, 255, 255, 0.28);
     text-align: center;
-    min-width: 28px;
+    min-width: 20px;
 }
 
 /* ============================
@@ -298,18 +321,17 @@
    ============================ */
 
 .codenotch-proc-list {
-    spacing: 2px;
-    margin-top: 2px;
+    spacing: 1px;
+    margin-top: 4px;
 }
 
 .codenotch-proc-row {
-    padding: 2px 0;
-    border-radius: 5px;
+    padding: 3px 2px;
 }
 
 .codenotch-proc-pct {
     font-size: 8pt;
-    color: rgba(255, 255, 255, 0.78);
+    color: rgba(255, 255, 255, 0.72);
 }
 
 /* ============================
@@ -320,46 +342,4 @@
     width: 8px;
     height: 8px;
     border-radius: 4px;
-}
-
-/* ============================
-   SEPARATORS
-   ============================ */
-
-.codenotch-separator {
-    height: 1px;
-    background-color: rgba(255, 255, 255, 0.06);
-    margin: 5px 0;
-}
-
-/* ============================
-   POPOVER CONTROLS
-   ============================ */
-
-.codenotch-card-menu .popup-menu-item {
-    padding: 5px 6px;
-    border-radius: 6px;
-    font-size: 8.5pt;
-}
-
-.codenotch-card-menu .popup-menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.04);
-}
-
-.codenotch-card-menu .popup-switch-menu-item {
-    padding: 5px 6px;
-    border-radius: 6px;
-    font-size: 8.5pt;
-}
-
-.codenotch-card-menu .popup-switch-menu-item:hover {
-    background-color: rgba(255, 255, 255, 0.04);
-}
-
-.codenotch-card-menu .popup-separator-menu-item {
-    margin: 2px 0;
-}
-
-.codenotch-card-menu .popup-switch-menu-item-switch {
-    border-radius: 10px;
 }

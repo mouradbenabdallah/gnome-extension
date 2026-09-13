@@ -267,11 +267,13 @@ export default class SparklineMonitorExtension extends Extension {
       w.card.setVisible(enabled);
     }
 
-    // Update glass opacity
+    // Update glass background transparency (baked into CSS, not actor opacity)
     if (this._glassMenuBox) {
       const opacity = this._getDouble("glass-opacity", 0.88);
-      const alpha = Math.round(opacity * 255);
-      this._glassMenuBox.opacity = alpha;
+      const alpha = Math.max(0.3, Math.min(1.0, opacity));
+      this._glassMenuBox.style =
+        `background-color: rgba(16, 16, 22, ${alpha})`;
+      this._glassMenuBox.opacity = 255;
     }
 
     if (this._compactSwitch) {
@@ -296,6 +298,7 @@ export default class SparklineMonitorExtension extends Extension {
       reactive: false,
       can_focus: false,
     });
+    headerItem.actor.add_style_class_name("codenotch-structural-item");
     const headerBox = new St.BoxLayout({
       vertical: true,
       style_class: "codenotch-glass-header",
@@ -313,8 +316,6 @@ export default class SparklineMonitorExtension extends Extension {
     headerItem.add_child(headerBox);
     menu.addMenuItem(headerItem);
 
-    menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
     // --- Widget grid container ---
     this._widgetGrid = new St.BoxLayout({
       style_class: "codenotch-glass-grid",
@@ -324,6 +325,7 @@ export default class SparklineMonitorExtension extends Extension {
       reactive: false,
       can_focus: false,
     });
+    this._widgetGridWrap.actor.add_style_class_name("codenotch-structural-item");
     this._widgetGridWrap.add_child(this._widgetGrid);
     menu.addMenuItem(this._widgetGridWrap);
 
@@ -332,6 +334,7 @@ export default class SparklineMonitorExtension extends Extension {
       reactive: false,
       can_focus: false,
     });
+    coresItem.actor.add_style_class_name("codenotch-structural-item");
     const coresWrap = new St.BoxLayout({
       vertical: true,
       style_class: "codenotch-card-section codenotch-cores-section",
@@ -353,13 +356,12 @@ export default class SparklineMonitorExtension extends Extension {
     // Populate widget cards into the grid
     this._populateWidgetGrid();
 
-    menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-
     // --- Controls ---
     this._pauseSwitch = new PopupMenu.PopupSwitchMenuItem(
       "Pause telemetry",
       this._manualPaused,
     );
+    this._pauseSwitch.actor.add_style_class_name("codenotch-controls-start");
     this._pauseSwitch.connect("toggled", (_item, state) => {
       this._manualPaused = state;
       this._updatePauseState();
@@ -435,7 +437,7 @@ export default class SparklineMonitorExtension extends Extension {
   _buildCoreGrid(count) {
     this._coresContainer.destroy_all_children();
     this._coreBars = [];
-    const perRow = 6;
+    const perRow = 8;
     const rows = Math.ceil(count / perRow);
     for (let r = 0; r < rows; r++) {
       const rowBox = new St.BoxLayout({
@@ -472,7 +474,7 @@ export default class SparklineMonitorExtension extends Extension {
     if (this._coreBars.length !== cores.length) {
       this._buildCoreGrid(cores.length);
     }
-    const CORE_MAX_H = 36;
+    const CORE_MAX_H = 18;
     for (let i = 0; i < cores.length; i++) {
       const clampPct = Math.max(0, Math.min(100, cores[i]));
       const fill = this._coreBars[i].fill;
@@ -500,7 +502,6 @@ export default class SparklineMonitorExtension extends Extension {
   _onMenuStateChanged(menu, open) {
     const content = menu.box;
     const animate = this._getBool("animate-popover", true);
-    const targetOpacity = Math.round(this._getDouble("glass-opacity", 0.88) * 255);
 
     if (open) {
       this._menuOpen = true;
@@ -513,7 +514,7 @@ export default class SparklineMonitorExtension extends Extension {
         content.scale_y = 0.97;
         content.opacity = 0;
         content.translation_y = -6;
-        content.ease_property("opacity", targetOpacity, {
+        content.ease_property("opacity", 255, {
           duration: 180,
           mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
         });
@@ -532,7 +533,7 @@ export default class SparklineMonitorExtension extends Extension {
       } else {
         content.scale_x = 1;
         content.scale_y = 1;
-        content.opacity = targetOpacity;
+        content.opacity = 255;
         content.translation_y = 0;
       }
     } else {
@@ -556,6 +557,11 @@ export default class SparklineMonitorExtension extends Extension {
           duration: 140,
           mode: Clutter.AnimationMode.EASE_IN_CUBIC,
         });
+      } else {
+        content.scale_x = 1;
+        content.scale_y = 1;
+        content.opacity = 255;
+        content.translation_y = 0;
       }
     }
   }

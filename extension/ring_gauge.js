@@ -7,19 +7,19 @@ import cairo from 'cairo';
  * Codenotch Palette Colors
  */
 const PALETTE = {
-    ringTrack: { r: 1.0, g: 1.0, b: 1.0, a: 0.18 },
-    ample:     { r: 0.188, g: 0.82, b: 0.345, a: 1.0 },  // #30D158 (under 50%)
-    watch:     { r: 1.0, g: 0.839, b: 0.039, a: 1.0 },   // #FFD60A (50% - 75%)
-    critical:  { r: 1.0, g: 0.623, b: 0.039, a: 1.0 },   // #FF9F0A (75% - 90%)
-    exhausted: { r: 1.0, g: 0.271, b: 0.227, a: 1.0 },   // #FF453A (> 90%)
-    glyphIdle: { r: 1.0, g: 1.0, b: 1.0, a: 0.82 },
+    ringTrack: { r: 1.0, g: 1.0, b: 1.0, a: 0.14 },
+    ample:     { r: 0.298, g: 0.765, b: 0.541, a: 1.0 }, // #4CC38A (under 50%)
+    watch:     { r: 0.90, g: 0.757, b: 0.353, a: 1.0 },  // #E6C15A (50% - 75%)
+    critical:  { r: 0.878, g: 0.588, b: 0.298, a: 1.0 }, // #E0964C (75% - 90%)
+    exhausted: { r: 0.878, g: 0.388, b: 0.357, a: 1.0 }, // #E0635B (> 90%)
+    glyphIdle: { r: 1.0, g: 1.0, b: 1.0, a: 0.80 },
 };
 
 // Apple-style monochrome accent used for all load bands.
 const PALETTE_MONO = {
-    ringTrack: { r: 1.0, g: 1.0, b: 1.0, a: 0.16 },
+    ringTrack: { r: 1.0, g: 1.0, b: 1.0, a: 0.13 },
     band:      { r: 0.49, g: 0.65, b: 1.0, a: 1.0 },   // #7DA6FF
-    glyphIdle: { r: 1.0, g: 1.0, b: 1.0, a: 0.82 },
+    glyphIdle: { r: 1.0, g: 1.0, b: 1.0, a: 0.80 },
 };
 
 export const RingGauge = GObject.registerClass(
@@ -50,7 +50,6 @@ class RingGauge extends St.DrawingArea {
         this._targetValue = 0.0;  // Desired value, 0.0 to 100.0
         this._fanAngle = 0.0;     // Rotation angle for fan blades
         this._animSource = 0;     // Smooth value interpolation timer
-        this._fanSource = 0;      // Continuous fan blade spin timer
 
         this.connect('destroy', () => this._stopAnimSources());
     }
@@ -59,51 +58,22 @@ class RingGauge extends St.DrawingArea {
         const target = Math.max(0.0, Math.min(100.0, Number(val) || 0.0));
         this._targetValue = target;
 
-        // Fan blades spin continuously while the fan is moving.
-        if (this._type === 'fan') {
-            if (target > 0)
-                this._ensureFanSpin();
-            else
-                this._stopFanSpin();
-        }
-
         // Animate the ring arc smoothly toward the target value.
+        // The fan blades only rotate while this short transition runs,
+        // then they settle — no permanent animation loop.
         if (!this._animSource) {
             if (Math.abs(this._value - this._targetValue) < 0.1) {
-                this._value = this._targetValue;
-                this.queue_repaint();
+                if (this._value !== this._targetValue) {
+                    this._value = this._targetValue;
+                    this.queue_repaint();
+                }
                 return;
             }
             this._animSource = GLib.timeout_add(
                 GLib.PRIORITY_DEFAULT,
-                50,
+                60,
                 () => this._animateStep()
             );
-        }
-    }
-
-    _ensureFanSpin() {
-        if (this._fanSource)
-            return;
-
-        this._fanSource = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-            const pct = this._value / 100.0;
-            if (pct <= 0.001) {
-                this._stopFanSpin();
-                return GLib.SOURCE_REMOVE;
-            }
-            // Gentle idle rotation that speeds up with fan %, ~1-1.5 rev/s
-            const step = 0.1 + pct * 0.6;
-            this._fanAngle = (this._fanAngle + step) % (Math.PI * 2);
-            this.queue_repaint();
-            return GLib.SOURCE_CONTINUE;
-        });
-    }
-
-    _stopFanSpin() {
-        if (this._fanSource) {
-            GLib.source_remove(this._fanSource);
-            this._fanSource = 0;
         }
     }
 
@@ -115,13 +85,23 @@ class RingGauge extends St.DrawingArea {
             this.queue_repaint();
             return GLib.SOURCE_REMOVE;
         }
-        this._value += diff * 0.3;
+        this._value += diff * 0.35;
+
+        // Fan blades spin proportionally to the current fan speed,
+        // only while the value is transitioning.
+        if (this._type === 'fan') {
+            const pct = this._value / 100.0;
+            if (pct > 0.01) {
+                const step = 0.15 + pct * 0.7;
+                this._fanAngle = (this._fanAngle + step) % (Math.PI * 2);
+            }
+        }
+
         this.queue_repaint();
         return GLib.SOURCE_CONTINUE;
     }
 
     _stopAnimSources() {
-        this._stopFanSpin();
         if (this._animSource) {
             GLib.source_remove(this._animSource);
             this._animSource = 0;
