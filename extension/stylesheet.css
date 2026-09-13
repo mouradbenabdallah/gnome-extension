@@ -63,7 +63,7 @@
 .codenotch-menu-boxpointer {
     -arrow-background-color: rgba(18, 18, 24, 0.90);
     -arrow-border-color: rgba(255, 255, 255, 0.08);
-    -arrow-border-radius: 12px;
+    -arrow-border-radius: 20px;
     -arrow-base: 18px;
     -arrow-rise: 8px;
 }
@@ -112,7 +112,28 @@
 }
 
 .codenotch-controls-start {
-    margin-top: 8px;
+    margin-top: 10px;
+}
+
+/* Bottom control toggles share the glass-card language instead of looking
+   like a stock GTK settings list: inset hairline surface, soft hover, and a
+   quiet switch. */
+.codenotch-card-menu .popup-switch-menu-item.codenotch-glass-control {
+    background-color: rgba(255, 255, 255, 0.035);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 8px 12px;
+    margin: 2px 0 5px 0;
+    transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.codenotch-card-menu .popup-switch-menu-item.codenotch-glass-control:hover {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.09);
+}
+
+.codenotch-card-menu .popup-switch-menu-item.codenotch-glass-control:active {
+    background-color: rgba(255, 255, 255, 0.05);
 }
 
 /* ============================
@@ -259,7 +280,8 @@
 }
 
 .sparkline-canvas {
-    border-radius: 5px;
+    border-radius: 6px;
+    background-color: rgba(255, 255, 255, 0.025);
 }
 
 /* ============================

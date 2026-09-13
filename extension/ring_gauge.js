@@ -51,6 +51,14 @@ class RingGauge extends St.DrawingArea {
         this._fanAngle = 0.0;     // Rotation angle for fan blades
         this._animSource = 0;     // Smooth value interpolation timer
 
+        // Value interpolation is event-driven (one short, finite timer per
+        // changed value) rather than a permanent animation loop. These
+        // tolerances trade a couple of animation frames for a lot fewer
+        // Cairo repaints — a 24px gauge cannot show sub-0.3% deltas anyway.
+        this._snapEps = 0.3;
+        this._animStep = 0.45;
+        this._animIntervalMs = 80;
+
         this.connect('destroy', () => this._stopAnimSources());
     }
 
@@ -62,7 +70,7 @@ class RingGauge extends St.DrawingArea {
         // The fan blades only rotate while this short transition runs,
         // then they settle — no permanent animation loop.
         if (!this._animSource) {
-            if (Math.abs(this._value - this._targetValue) < 0.1) {
+            if (Math.abs(this._value - this._targetValue) < this._snapEps) {
                 if (this._value !== this._targetValue) {
                     this._value = this._targetValue;
                     this.queue_repaint();
@@ -71,7 +79,7 @@ class RingGauge extends St.DrawingArea {
             }
             this._animSource = GLib.timeout_add(
                 GLib.PRIORITY_DEFAULT,
-                60,
+                this._animIntervalMs,
                 () => this._animateStep()
             );
         }
@@ -79,16 +87,16 @@ class RingGauge extends St.DrawingArea {
 
     _animateStep() {
         const diff = this._targetValue - this._value;
-        if (Math.abs(diff) <= 0.1) {
+        if (Math.abs(diff) <= this._snapEps) {
             this._value = this._targetValue;
             this._animSource = 0;
             this.queue_repaint();
             return GLib.SOURCE_REMOVE;
         }
-        this._value += diff * 0.35;
+        this._value += diff * this._animStep;
 
-        // Fan blades spin proportionally to the current fan speed,
-        // only while the value is transitioning.
+        // Fan blades spin in proportion to the reached fan speed, only while
+        // the value is transitioning.
         if (this._type === 'fan') {
             const pct = this._value / 100.0;
             if (pct > 0.01) {

@@ -54,18 +54,18 @@ export function createFanWidget() {
       const fanPct = typeof data.fan_pct === "number" ? data.fan_pct : 0;
       const fanRpm = typeof data.fan_rpm === "number" ? data.fan_rpm : 0;
 
-      if (fanRpm > 0) {
-        card.setValue(`${fanRpm} RPM`);
-        card.setSubtitle(`${fanPct}%`);
-      } else {
-        card.setValue(`${fanPct}%`);
-        card.setSubtitle(fanPct > 0 ? "" : "Idle / Stopped");
-      }
+      // Single headline stat: the load percent sits as the big value and the
+      // RPM (or idle note) goes to the faint subtitle line. The percent is NOT
+      // repeated in the per-fan detail rows or the panel.
+      card.setValue(`${fanPct}%`);
+      card.setSubtitle(
+        fanRpm > 0 ? `${fanRpm} RPM` : fanPct > 0 ? "" : "Idle / Stopped",
+      );
       card.setProgress(fanPct / 100.0);
 
       const fanData = fans.map((f) => [
         f.label || "Fan",
-        f.rpm > 0 ? `${f.rpm} RPM  \u00B7  ${f.pct}%` : `${f.pct}%`,
+        f.rpm > 0 ? `${f.rpm} RPM` : "Stopped",
       ]);
       syncFanRows(subList, fanRows, fanData);
     },

@@ -20,11 +20,12 @@ export function createCpuWidget() {
         settings && settings.get_boolean
           ? settings.get_boolean("show-cpu-temp")
           : true;
-      let text = `${data.cpu.toFixed(1)}%`;
-      if (showTemp && typeof data.cpu_temp === "number") {
-        text += `  ·  ${data.cpu_temp}\u00B0C`;
-      }
-      card.setValue(text);
+      card.setValue(`${data.cpu.toFixed(1)}%`);
+      card.setSubtitle(
+        showTemp && typeof data.cpu_temp === "number"
+          ? `${data.cpu_temp}\u00B0C`
+          : "",
+      );
       card.setProgress(data.cpu / 100.0);
       spark.pushValue(data.cpu);
     },

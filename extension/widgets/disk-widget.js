@@ -27,7 +27,8 @@ export function createDiskWidget() {
       const rd = typeof data.disk_read_kbs === "number" ? data.disk_read_kbs : 0;
       const wr =
         typeof data.disk_write_kbs === "number" ? data.disk_write_kbs : 0;
-      card.setValue(`R ${fmtRate(rd)}  \u00B7  W ${fmtRate(wr)}`);
+      card.setValue(`R ${fmtRate(rd)}`);
+      card.setSubtitle(`W ${fmtRate(wr)}`);
       readSpark.pushValue(rd);
       writeSpark.pushValue(wr);
     },

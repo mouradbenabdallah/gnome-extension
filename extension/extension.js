@@ -25,6 +25,14 @@ const SCHEMA_ID = "org.gnome.shell.extensions.sparkline-monitor";
 const SERVICE_SOCKET = "codenotch-monitor.service.sock";
 const CHILD_SOCKET = "codenotch-monitor.child.sock";
 
+// Dynamic-Island morph timings. Open overshoots with EASE_OUT_BACK and lets
+// the inner content cross-fade in only after the shape is mostly expanded.
+const MORPH_OPEN_MS = 420;
+const MORPH_CLOSE_MS = 260;
+const MORPH_FADE_START = 0.42;
+const CAPSULE_RADIUS = 15;
+const CARD_RADIUS = 24;
+
 export default class SparklineMonitorExtension extends Extension {
   enable() {
     this._cancellable = new Gio.Cancellable();
@@ -45,6 +53,11 @@ export default class SparklineMonitorExtension extends Extension {
     this._menuOpen = false;
     this._latestData = null;
     this._telemetryCounter = 0;
+
+    // Dynamic-Island morph state
+    this._morphTimers = [];
+    this._morphActive = false;
+    this._morphRadius = null;
 
     this._loadSettings();
     this._setupWidgetRegistry();
@@ -126,6 +139,7 @@ export default class SparklineMonitorExtension extends Extension {
     });
     notchBox.add_child(this._compactDot);
 
+    this._notchBox = notchBox;
     this._indicator.add_child(notchBox);
   }
 
@@ -268,13 +282,7 @@ export default class SparklineMonitorExtension extends Extension {
     }
 
     // Update glass background transparency (baked into CSS, not actor opacity)
-    if (this._glassMenuBox) {
-      const opacity = this._getDouble("glass-opacity", 0.88);
-      const alpha = Math.max(0.3, Math.min(1.0, opacity));
-      this._glassMenuBox.style =
-        `background-color: rgba(16, 16, 22, ${alpha})`;
-      this._glassMenuBox.opacity = 255;
-    }
+    this._setGlassStyle();
 
     if (this._compactSwitch) {
       this._compactSwitch.setToggleState(compact);
@@ -362,6 +370,7 @@ export default class SparklineMonitorExtension extends Extension {
       this._manualPaused,
     );
     this._pauseSwitch.actor.add_style_class_name("codenotch-controls-start");
+    this._pauseSwitch.actor.add_style_class_name("codenotch-glass-control");
     this._pauseSwitch.connect("toggled", (_item, state) => {
       this._manualPaused = state;
       this._updatePauseState();
@@ -372,6 +381,7 @@ export default class SparklineMonitorExtension extends Extension {
       "Compact mode (status dot)",
       this._getBool("compact-mode", false),
     );
+    this._compactSwitch.actor.add_style_class_name("codenotch-glass-control");
     this._compactSwitch.connect("toggled", (_item, state) => {
       this._setBool("compact-mode", state);
     });
@@ -497,73 +507,261 @@ export default class SparklineMonitorExtension extends Extension {
     widget._lastBandClass = cls;
   }
 
-  // ----------------------------- Popover Animation -----------------------------
+  // ----------------------------- Dynamic-Island Morph -----------------------------
 
   _onMenuStateChanged(menu, open) {
-    const content = menu.box;
+    // During teardown let the stock popup tween run to completion instead of
+    // animating actors that are being destroyed.
+    if (this._disabling || !this._glassMenuBox) return;
+
     const animate = this._getBool("animate-popover", true);
 
     if (open) {
       this._menuOpen = true;
       this._flushLatestData();
       this._resumeUiUpdates();
-      content.remove_all_transitions();
-      content.set_pivot_point(0.5, 0);
+
       if (animate) {
-        content.scale_x = 0.97;
-        content.scale_y = 0.97;
-        content.opacity = 0;
-        content.translation_y = -6;
-        content.ease_property("opacity", 255, {
-          duration: 180,
-          mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-        });
-        content.ease_property("scale-x", 1, {
-          duration: 220,
-          mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-        });
-        content.ease_property("scale-y", 1, {
-          duration: 220,
-          mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-        });
-        content.ease_property("translation-y", 0, {
-          duration: 200,
-          mode: Clutter.AnimationMode.EASE_OUT_CUBIC,
-        });
+        this._morphOpen();
       } else {
-        content.scale_x = 1;
-        content.scale_y = 1;
-        content.opacity = 255;
-        content.translation_y = 0;
+        this._cancelMorph();
+        const bp = menu.actor;
+        bp.remove_all_transitions();
+        bp.opacity = 255;
+        bp.scale_x = 1;
+        bp.scale_y = 1;
+        bp.translation_x = 0;
+        bp.translation_y = 0;
+        bp._muteKeys = false;
+        bp._muteInput = false;
+        this._setChildrenFade(255, 0);
       }
     } else {
       this._menuOpen = false;
       this._freezeUi();
+
       if (animate) {
-        content.remove_all_transitions();
-        content.ease_property("opacity", 0, {
-          duration: 120,
-          mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-        });
-        content.ease_property("scale-x", 0.97, {
-          duration: 140,
-          mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-        });
-        content.ease_property("scale-y", 0.97, {
-          duration: 140,
-          mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-        });
-        content.ease_property("translation-y", 4, {
-          duration: 140,
-          mode: Clutter.AnimationMode.EASE_IN_CUBIC,
-        });
+        this._morphClose();
       } else {
-        content.scale_x = 1;
-        content.scale_y = 1;
-        content.opacity = 255;
-        content.translation_y = 0;
+        this._cancelMorph();
       }
     }
+  }
+
+  _cancelMorph() {
+    for (const t of this._morphTimers) {
+      if (t) GLib.source_remove(t);
+    }
+    this._morphTimers = [];
+    this._morphActive = false;
+    this._morphRadius = null;
+    if (this._glassMenuBox) {
+      this._glassMenuBox.remove_all_transitions();
+      this._glassMenuBox.width = -1;
+      this._glassMenuBox.height = -1;
+    }
+    this._setGlassStyle();
+  }
+
+  /** Start geometry: the top-bar capsule the island morphs out of. */
+  _capsuleMorphSize() {
+    const box = this._notchBox;
+    if (box && box.width > 0 && box.height > 0) {
+      return { w: Math.max(18, box.width), h: Math.max(14, box.height) };
+    }
+    return { w: 96, h: 34 };
+  }
+
+  /** Final geometry: the popover's natural (CSS/layout) size. */
+  _preferredCardSize() {
+    const bin = this._glassMenuBox;
+    try {
+      const [, natW] = bin.get_preferred_width(-1);
+      const [, natH] = bin.get_preferred_height(-1);
+      return {
+        w: Math.max(natW, 320),
+        h: Math.max(natH, 300),
+      };
+    } catch (_) {
+      return { w: 430, h: 480 };
+    }
+  }
+
+  /**
+   * Inline glass style. While a morph is active we neutralise the CSS
+   * min-width/min-height so the fixed-size width/height tween is the
+   * authority, and we expose a border-radius that is animated in a few
+   * cheap discrete steps alongside the shape change.
+   */
+  _setGlassStyle() {
+    if (!this._glassMenuBox) return;
+    const alpha = Math.max(
+      0.3,
+      Math.min(1.0, this._getDouble("glass-opacity", 0.88)),
+    );
+    let style = `background-color: rgba(16, 16, 22, ${alpha})`;
+    if (this._morphRadius) style += `; border-radius: ${this._morphRadius}px`;
+    if (this._morphActive)
+      style += `; min-width: 0px; min-height: 0px`;
+    this._glassMenuBox.style = style;
+    this._glassMenuBox.opacity = 255;
+  }
+
+  /** Fade the popover's inner items (not the glass shell) in or out. */
+  _setChildrenFade(opacity, duration, mode) {
+    const bin = this._glassMenuBox;
+    if (!bin) return;
+    for (const child of bin.get_children()) {
+      if (duration > 0) {
+        child.ease_property("opacity", opacity, { duration, mode });
+      } else {
+        child.remove_all_transitions();
+        child.opacity = opacity;
+      }
+    }
+  }
+
+  _morphOpen() {
+    const bp = this._indicator.menu.actor;
+    const bin = this._glassMenuBox;
+    this._cancelMorph();
+
+    // Suppress the stock popup tween so the island morph is the only motion:
+    // an opaque glass shape, already anchored where the capsule sits.
+    bp.remove_all_transitions();
+    bp.set_pivot_point(0.5, 0);
+    bp.opacity = 255;
+    bp.scale_x = 1;
+    bp.scale_y = 1;
+    bp.translation_x = 0;
+    bp.translation_y = 0;
+    bp._muteKeys = false;
+    bp._muteInput = false;
+
+    const start = this._capsuleMorphSize();
+    const fin = this._preferredCardSize();
+
+    this._morphActive = true;
+    this._morphRadius = CAPSULE_RADIUS;
+    this._setGlassStyle();
+    this._setChildrenFade(0, 0);
+
+    bin.remove_all_transitions();
+    bin.width = start.w;
+    bin.height = start.h;
+
+    // Real geometry morph: width, height and corner radius change together
+    // from the capsule's proportions toward the full popover size, with an
+    // overshooting spring curve (EASE_OUT_BACK).
+    bin.ease_property("width", fin.w, {
+      duration: MORPH_OPEN_MS,
+      mode: Clutter.AnimationMode.EASE_OUT_BACK,
+    });
+    bin.ease_property("height", fin.h, {
+      duration: MORPH_OPEN_MS,
+      mode: Clutter.AnimationMode.EASE_OUT_BACK,
+    });
+
+    // Content reveals only after the morph is ~40% complete so the shape
+    // change reads first; radius steps up in two cheap CSS cherry picks.
+    const fadeAt = Math.round(MORPH_OPEN_MS * MORPH_FADE_START);
+    this._morphTimers.push(
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, fadeAt, () => {
+        if (!this._morphActive) return GLib.SOURCE_REMOVE;
+        this._morphRadius = 20;
+        this._setGlassStyle();
+        this._setChildrenFade(
+          255,
+          Math.max(180, MORPH_OPEN_MS - fadeAt - 40),
+          Clutter.AnimationMode.EASE_OUT_CUBIC,
+        );
+        return GLib.SOURCE_REMOVE;
+      }),
+    );
+    this._morphTimers.push(
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(MORPH_OPEN_MS * 0.85), () => {
+        if (!this._morphActive) return GLib.SOURCE_REMOVE;
+        this._morphRadius = CARD_RADIUS;
+        this._setGlassStyle();
+        return GLib.SOURCE_REMOVE;
+      }),
+    );
+    this._morphTimers.push(
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, MORPH_OPEN_MS + 80, () => {
+        this._morphActive = false;
+        this._morphRadius = null;
+        bin.width = -1;
+        bin.height = -1;
+        this._morphTimers = [];
+        this._setGlassStyle();
+        return GLib.SOURCE_REMOVE;
+      }),
+    );
+  }
+
+  _morphClose() {
+    const bp = this._indicator.menu.actor;
+    const bin = this._glassMenuBox;
+    this._cancelMorph();
+
+    // Cancel the stock hide tween: we own the reverse morph below.
+    bp.remove_all_transitions();
+
+    const start = this._capsuleMorphSize();
+
+    this._morphActive = true;
+    this._morphRadius = 20;
+    this._setGlassStyle();
+    this._setChildrenFade(0, 110, Clutter.AnimationMode.EASE_IN_CUBIC);
+
+    bin.remove_all_transitions();
+    // Reverse is faster and ease-in, collapsing back into the capsule.
+    bin.ease_property("width", start.w, {
+      duration: MORPH_CLOSE_MS,
+      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+    });
+    bin.ease_property("height", start.h, {
+      duration: MORPH_CLOSE_MS,
+      mode: Clutter.AnimationMode.EASE_IN_CUBIC,
+    });
+
+    this._morphTimers.push(
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.round(MORPH_CLOSE_MS * 0.4), () => {
+        if (!this._morphActive) return GLib.SOURCE_REMOVE;
+        this._morphRadius = CAPSULE_RADIUS;
+        this._setGlassStyle();
+        return GLib.SOURCE_REMOVE;
+      }),
+    );
+    this._morphTimers.push(
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, MORPH_CLOSE_MS + 60, () => {
+        this._morphActive = false;
+        this._morphRadius = null;
+        bin.remove_all_transitions();
+        bin.width = -1;
+        bin.height = -1;
+        this._morphTimers = [];
+        this._setGlassStyle();
+        this._setChildrenFade(255, 0);
+        // Restore the stock BoxPointer closed state so the popup stays fully
+        // hidden and is clean for its next open.
+        if (bp) {
+          bp.remove_all_transitions();
+          bp.opacity = 0;
+          bp.scale_x = 1;
+          bp.scale_y = 1;
+          bp.translation_x = 0;
+          bp.translation_y = 0;
+          bp.hide();
+          bp._muteKeys = true;
+          bp._muteInput = true;
+        }
+        try {
+          this._indicator?.menu?.emit("menu-closed");
+        } catch (_) {}
+        return GLib.SOURCE_REMOVE;
+      }),
+    );
   }
 
   _resumeUiUpdates() {
@@ -610,27 +808,37 @@ export default class SparklineMonitorExtension extends Extension {
     this._latestData = data;
     this._telemetryCounter++;
 
-    // Panel capsule is always visible: update it on every sample.
+    // Panel capsule is always visible: update it on every sample, but only touch
+    // a label when its text actually changed — identical samples shouldn't
+    // queue relayouts.
     if (typeof data.cpu === "number" && this._cpuCell) {
-      this._cpuCell.label.text = `${Math.round(data.cpu)}%`;
+      const cpuVal = `${Math.round(data.cpu)}%`;
+      if (this._cpuCell.label.text !== cpuVal) {
+        this._cpuCell.label.text = cpuVal;
+      }
       if (this._cpuCell.sub) {
-        this._cpuCell.sub.text =
+        const subVal =
           this._getBool("show-cpu-temp", true) &&
           typeof data.cpu_temp === "number"
             ? `${data.cpu_temp}\u00B0C`
             : "";
+        if (this._cpuCell.sub.text !== subVal) this._cpuCell.sub.text = subVal;
       }
       this._cpuGauge.setValue(data.cpu);
     }
 
     if (typeof data.ram === "number" && this._ramCell) {
-      this._ramCell.label.text = `${Math.round(data.ram)}%`;
+      const ramVal = `${Math.round(data.ram)}%`;
+      if (this._ramCell.label.text !== ramVal) {
+        this._ramCell.label.text = ramVal;
+      }
       if (this._ramCell.sub) {
         const usedGb =
           data.ram_used_gb !== undefined ? data.ram_used_gb.toFixed(1) : "?";
         const totalGb =
           data.ram_total_gb !== undefined ? data.ram_total_gb.toFixed(1) : "?";
-        this._ramCell.sub.text = `${usedGb}G/${totalGb}G`;
+        const subVal = `${usedGb}G/${totalGb}G`;
+        if (this._ramCell.sub.text !== subVal) this._ramCell.sub.text = subVal;
       }
       this._ramGauge.setValue(data.ram);
     }
@@ -638,9 +846,12 @@ export default class SparklineMonitorExtension extends Extension {
     const fanPct = typeof data.fan_pct === "number" ? data.fan_pct : 0;
     const fanRpm = typeof data.fan_rpm === "number" ? data.fan_rpm : 0;
     if (this._fanCell) {
-      this._fanCell.label.text = `${fanPct}%`;
-      this._fanCell.sub.text =
-        fanRpm > 0 ? `${fanRpm} RPM` : "Stopped";
+      const fanVal = `${fanPct}%`;
+      if (this._fanCell.label.text !== fanVal) {
+        this._fanCell.label.text = fanVal;
+      }
+      const fanSub = fanRpm > 0 ? `${fanRpm} RPM` : "Stopped";
+      if (this._fanCell.sub.text !== fanSub) this._fanCell.sub.text = fanSub;
       this._fanGauge.setValue(fanPct);
     }
 
@@ -1079,6 +1290,8 @@ export default class SparklineMonitorExtension extends Extension {
 
   disable() {
     this._disabling = true;
+
+    this._cancelMorph();
 
     if (this._lockWatchdog) {
       GLib.source_remove(this._lockWatchdog);

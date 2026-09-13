@@ -22,7 +22,8 @@ export function createNetworkWidget() {
     update(data) {
       const rx = typeof data.net_rx_kbs === "number" ? data.net_rx_kbs : 0;
       const tx = typeof data.net_tx_kbs === "number" ? data.net_tx_kbs : 0;
-      card.setValue(`\u2193 ${fmtRate(rx)}   \u2191 ${fmtRate(tx)}`);
+      card.setValue(`\u2193 ${fmtRate(rx)}`);
+      card.setSubtitle(`\u2191 ${fmtRate(tx)}`);
       rxSpark.pushValue(rx);
       txSpark.pushValue(tx);
     },

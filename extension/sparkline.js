@@ -64,6 +64,10 @@ class Sparkline extends St.DrawingArea {
 
     pushValue(val) {
         const v = Math.max(0.0, Number(val) || 0.0);
+        // Skip pushing (and thus repainting) when the sample didn't change:
+        // a sparkline that shows the same reading doesn't need a new frame.
+        const last = this._history[this._history.length - 1];
+        if (Math.abs(v - last) < 0.001) return;
         this._history.shift();
         this._history.push(v);
         // Slowly track the peak so short spikes don't crush the baseline.
@@ -74,6 +78,10 @@ class Sparkline extends St.DrawingArea {
     /** Replaces the whole history window with `values` (e.g. a 30s overview). */
     setData(values) {
         const list = Array.from(values ?? [], (v) => Math.max(0.0, Number(v) || 0.0));
+        if (list.length === this._history.length &&
+            list.every((v, i) => Math.abs(v - this._history[i]) < 0.001)) {
+            return;
+        }
         if (list.length > this._maxPoints) {
             this._history = list.slice(list.length - this._maxPoints);
         } else {
@@ -136,14 +144,6 @@ class Sparkline extends St.DrawingArea {
         const paddingY = 2.0;
         const usableH = h - (paddingY * 2);
 
-        const points = [];
-        for (let i = 0; i < len; i++) {
-            const x = i * stepX;
-            const normalized = Math.min(1.0, this._history[i] / maxVal);
-            const y = (h - paddingY) - (normalized * usableH);
-            points.push({ x, y });
-        }
-
         // Determine dynamic line color based on the most recent reading.
         const latestVal = this._history[len - 1];
         const latestFrac = latestVal / maxVal;
@@ -154,25 +154,51 @@ class Sparkline extends St.DrawingArea {
             activeColor = this._warnColor;
         }
 
-        // Draw translucent background fill
-        cr.moveTo(points[0].x, h);
-        for (let i = 0; i < len; i++) {
-            cr.lineTo(points[i].x, points[i].y);
+        // Downsample the history so a frame never draws more samples than the
+        // canvas can resolve (painting cost stays bounded by the pixel width).
+        const stride = Math.max(1, Math.ceil(len / Math.max(2, Math.floor(w))));
+        const xs = [];
+        const ys = [];
+        for (let i = 0; i < len; i += stride) {
+            const x = i * stepX;
+            const normalized = Math.min(1.0, this._history[i] / maxVal);
+            xs.push(x);
+            ys.push((h - paddingY) - (normalized * usableH));
         }
-        cr.lineTo(points[len - 1].x, h);
-        cr.closePath();
+        // Always keep the freshest sample on screen, even with stride > 1.
+        const lastX = (len - 1) * stepX;
+        if (xs[xs.length - 1] !== lastX) {
+            xs.push(lastX);
+            ys.push((h - paddingY) - (latestFrac * usableH));
+        }
+        if (xs.length < 2) {
+            cr.$dispose();
+            return;
+        }
 
-        cr.setSourceRGBA(activeColor.r, activeColor.g, activeColor.b, 0.16);
+        // Gradient fill under the line: weighted at the trace, dissolving to
+        // transparent at the baseline so the sparkline carries real weight.
+        const grad = cr.createLinearGradient(0, paddingY, 0, h);
+        grad.addColorStopRGBA(0, activeColor.r, activeColor.g, activeColor.b, 0.32);
+        grad.addColorStopRGBA(1, activeColor.r, activeColor.g, activeColor.b, 0.02);
+        cr.moveTo(xs[0], h);
+        for (let i = 0; i < xs.length; i++) {
+            cr.lineTo(xs[i], ys[i]);
+        }
+        cr.lineTo(xs[xs.length - 1], h);
+        cr.closePath();
+        cr.setSource(grad);
         cr.fill();
 
-        // Draw antialiased sparkline stroke
-        cr.setLineWidth(1.1);
+        // Draw a heavier, antialiased sparkline stroke so the trend reads at
+        // a glance instead of looking like pure decoration.
+        cr.setLineWidth(1.8);
         cr.setLineCap(cairo.LineCap.ROUND);
         cr.setLineJoin(cairo.LineJoin.ROUND);
 
-        cr.moveTo(points[0].x, points[0].y);
-        for (let i = 1; i < len; i++) {
-            cr.lineTo(points[i].x, points[i].y);
+        cr.moveTo(xs[0], ys[0]);
+        for (let i = 1; i < xs.length; i++) {
+            cr.lineTo(xs[i], ys[i]);
         }
 
         cr.setSourceRGBA(activeColor.r, activeColor.g, activeColor.b, 0.95);
